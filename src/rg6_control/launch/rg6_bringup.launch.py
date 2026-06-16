@@ -12,9 +12,7 @@ Voraussetzung: der Workspace mit rg6_control ist in robot.yaml unter
 """
 
 from launch import LaunchDescription
-from launch.substitutions import PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
 
 # Robotspezifisch (a200-0553):
 NAMESPACE = "/a200_0553/manipulators"
@@ -22,18 +20,15 @@ CONTROLLER_MANAGER = "/a200_0553/manipulators/controller_manager"
 
 
 def generate_launch_description():
-    io_params = PathJoinSubstitution(
-        [FindPackageShare("rg6_control"), "config", "io_and_status_controller.yaml"]
-    )
-
-    # 1) io_and_status_controller laden+aktivieren (wartet auf den controller_manager)
+    # 1) io_and_status_controller laden+aktivieren (wartet auf den controller_manager).
+    #    Der Controller-TYP steht in der control.yaml (per clearpath-custom-setup
+    #    gepatcht) -> hier reicht der Name.
     io_spawner = Node(
         package="controller_manager",
         executable="spawner",
         arguments=[
             "io_and_status_controller",
             "-c", CONTROLLER_MANAGER,
-            "--param-file", io_params,
             "--controller-manager-timeout", "60",
         ],
         output="screen",

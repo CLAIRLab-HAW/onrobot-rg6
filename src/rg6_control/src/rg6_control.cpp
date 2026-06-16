@@ -38,6 +38,27 @@ public:
       "rg6_control/close_gripper",
       std::bind(&RG6ControlNode::close_callback, this, std::placeholders::_1, std::placeholders::_2));
     io_client_ = this->create_client<ur_msgs::srv::SetIO>("io_and_status_controller/set_io");
+
+    // Tool-Spannung beim Start einmalig auf 24 V setzen (RG6-Stromversorgung).
+    // Verzoegert, damit der io_and_status_controller Zeit hat, hochzukommen.
+    voltage_timer_ = this->create_wall_timer(
+      std::chrono::seconds(3),
+      [this]()
+      {
+        voltage_timer_->cancel();   // einmalig
+        if (!io_client_->wait_for_service(std::chrono::seconds(2)))
+        {
+          RCLCPP_WARN(this->get_logger(),
+            "RG6: set_io nicht verfuegbar - Tool-Spannung (24V) nicht gesetzt");
+          return;
+        }
+        auto req = std::make_shared<ur_msgs::srv::SetIO::Request>();
+        req->fun = 4;        // FUN_SET_TOOL_VOLTAGE
+        req->pin = 0;
+        req->state = 24.0f;
+        io_client_->async_send_request(req);
+        RCLCPP_INFO(this->get_logger(), "RG6: Tool-Spannung auf 24V gesetzt");
+      });
   }
 
 private:
@@ -150,6 +171,7 @@ private:
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_gripper_service_, close_gripper_service_;
   rclcpp::Client<ur_msgs::srv::SetIO>::SharedPtr io_client_;
+  rclcpp::TimerBase::SharedPtr voltage_timer_;
 };
 
 int main(int argc, char * argv[])

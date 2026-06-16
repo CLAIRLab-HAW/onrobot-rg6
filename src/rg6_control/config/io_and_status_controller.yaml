@@ -1,0 +1,13 @@
+# Laedt den UR GPIOController als 'io_and_status_controller' in den
+# manipulators-controller_manager (den Clearpath nicht von selbst spawnt).
+# TYP gehoert auf den controller_manager, Controller-Params unter den Controller-Node.
+# Voll-qualifizierte Namen, weil alles unter /a200_0553/manipulators liegt.
+
+/a200_0553/manipulators/controller_manager:
+  ros__parameters:
+    io_and_status_controller:
+      type: ur_controllers/GPIOController
+
+/a200_0553/manipulators/io_and_status_controller:
+  ros__parameters:
+    tf_prefix: arm_0_

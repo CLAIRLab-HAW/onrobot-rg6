@@ -20,11 +20,11 @@ class RG6ControlNode : public rclcpp::Node{
       io_client_ = this->create_client<ur_msgs::srv::SetIO>("/io_and_status_controller/set_io");
     }
   private:
-    void open_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    void open_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
       send_io_command(io_fun_write, io_out_fun_pin, gripper_open, response);
     }
-    void close_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    void close_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
       send_io_command(io_fun_write, io_out_fun_pin, gripper_close, response);
     }
@@ -92,7 +92,7 @@ class RG6ControlNode : public rclcpp::Node{
       }
       gripper_monitor.reset();
       response->success = target_reached;
-      response->message =  ("Gripper %s confirmed", target_reached ? "OK" : "TIMEOUT");
+      response->message = target_reached ? "Gripper OK" : "Gripper TIMEOUT";
       RCLCPP_INFO(this->get_logger(), "Gripper %s confirmed", target_reached ? "OK" : "TIMEOUT");
     }
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_gripper_service_, close_gripper_service_;

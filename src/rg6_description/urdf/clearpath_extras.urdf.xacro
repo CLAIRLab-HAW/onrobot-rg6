@@ -53,7 +53,7 @@
   <joint name="rg6_tool0_to_base" type="fixed">
     <parent link="arm_0_tool0"/>
     <child link="rg6_onrobot_rg6_base_link"/>
-    <origin xyz="0 0 0" rpy="0 0 1.5708"/>
+    <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
   </joint>
 
   <!-- Greifer-TCP (mittig zwischen den Fingerspitzen, grob). -->

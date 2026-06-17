@@ -76,10 +76,26 @@ private:
 
   void publish()
   {
+    // ALLE 6 Greifergelenke explizit publizieren. Der robot_state_publisher wertet
+    // die <mimic>-Tags des Modells nicht aus -> wuerde 'rg6_finger_joint' allein nur
+    // left_outer_knuckle setzen, der Rest faellt auf den Ursprung ("Teile liegen
+    // nebeneinander"). Faktoren = die mimic-multiplier aus onrobot_rg6_model_macro:
+    //   finger_joint (Treiber)        : +1
+    //   *_inner_knuckle_joint         : -1
+    //   *_inner_finger_joint          : +1
+    //   right_outer_knuckle_joint     : -1
+    const double t = position_;
     auto joint_msg = sensor_msgs::msg::JointState();
     joint_msg.header.stamp = this->get_clock()->now();
-    joint_msg.name = {"rg6_finger_joint"};
-    joint_msg.position = {position_};
+    joint_msg.name = {
+      "rg6_finger_joint",
+      "rg6_left_inner_knuckle_joint",
+      "rg6_left_inner_finger_joint",
+      "rg6_right_outer_knuckle_joint",
+      "rg6_right_inner_knuckle_joint",
+      "rg6_right_inner_finger_joint",
+    };
+    joint_msg.position = { t, -t, t, -t, -t, t };
     pub_->publish(joint_msg);
   }
 

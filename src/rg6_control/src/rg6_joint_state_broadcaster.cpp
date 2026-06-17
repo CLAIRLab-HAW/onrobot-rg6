@@ -30,6 +30,12 @@ private:
     auto analog_input = msg->analog_input2;
     double gripper_position = min_angle + (analog_input - min_in) * (max_angle - min_angle) / (max_in - min_in);
 
+    // Klemmen: ein unerwarteter analog_input2-Wert (falsche Einheit/Bereich) darf
+    // das Gelenk nicht ueber die URDF-Limits hinaus treiben -> Modell bliebe sonst
+    // "zerpflueckt". min_angle < max_angle.
+    if (gripper_position < min_angle) gripper_position = min_angle;
+    if (gripper_position > max_angle) gripper_position = max_angle;
+
     joint_msg.header.stamp = this->get_clock()->now();
     joint_msg.name = {"rg6-l_out_joint"};
     joint_msg.position = {gripper_position};

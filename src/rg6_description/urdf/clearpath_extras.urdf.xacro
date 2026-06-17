@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+<!--
+  Clearpath URDF-EXTRAS fuer a200-0553.
+  Wird vom Clearpath-Generator eingebunden ueber robot.yaml:
+      platform:
+        extras:
+          urdf:
+            path: /home/robot/colcon_ws/.../clearpath_extras.urdf.xacro
+  (Pfad an deinen Ablageort anpassen; Datei muss vom Generator lesbar sein.)
+
+  Haengt NUR neue Links/Joints an bereits vom Generator erzeugte Frames an:
+    - arm_0_tool0   = UR5 Tool-Frame (ROS-Industrial all-zeros)  -> RG6-Greifer
+    - <MARKER_PARENT> = Frame, auf dem der ArUco-Marker physisch sitzt
+
+  WICHTIG:
+    * Alle Greifer-Links sind mit 'rg6_' praefixiert -> KEINE Kollision mit
+      dem Husky 'base_link'.
+    * rg6_description muss in einem in robot.yaml eingetragenen Workspace liegen.
+    * Greifer-Gelenke hier als 'fixed' (Nominalpose) -> rendert zuverlaessig ohne
+      eigene joint_states. Fuer echte Auf/Zu-Animation siehe Hinweis unten.
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find rg6_description)/urdf/materials.xacro"/>
+  <material name="black"><color rgba="0.165 0.165 0.165 1.0"/></material>
+  <material name="white"><color rgba="0.9137 0.9137 0.9137 1.0"/></material>
+
+  <!-- =========================== ArUco-Marker =========================== -->
+  <!-- TODO: MARKER_PARENT + Offset an die reale Position anpassen.
+       Im Altmodell war der Marker an 'robot_mount' mit xyz 0.048 -0.134 0. -->
+  <link name="aruco_marker">
+    <visual>
+      <geometry><box size="0.127 0.127 0.001"/></geometry>
+      <material name="white"/>
+    </visual>
+  </link>
+  <joint name="aruco_to_base" type="fixed">
+    <parent link="default_mount"/>          <!-- TODO: korrektes Frame -->
+    <child link="aruco_marker"/>
+    <origin rpy="0 0 0" xyz="0.048 -0.134 0"/>  <!-- TODO: realer Offset -->
+  </joint>
+
+  <!-- ===================== RG6-Greifer an arm_0_tool0 =================== -->
+  <joint name="rg6_tool0_to_base" type="fixed">
+    <parent link="arm_0_tool0"/>
+    <child link="rg6_base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="rg6_base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
+    </collision>
+  </link>
+
+  <link name="rg6_g_main">
+    <visual>
+      <origin xyz="0.031849 -1e-06 -0.04953" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/g_main.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0.031849 -1e-06 -0.04953" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/g_main.stl" scale="0.001 0.001 0.001"/></geometry>
+    </collision>
+  </link>
+
+  <link name="rg6_l_out">
+    <visual>
+      <origin xyz="-0.023851 -0.012801 -0.13453" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/l_out.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
+
+  <link name="rg6_r_out">
+    <visual>
+      <origin xyz="0.023749 -0.012801 -0.13453" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/r_out.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
+
+  <link name="rg6_l_tip">
+    <visual>
+      <origin xyz="-0.071235 0.012499 -0.19895" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/l_tip.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+
+  <link name="rg6_r_tip">
+    <visual>
+      <origin xyz="0.071133 0.012499 -0.199024" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/r_tip.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+
+  <link name="rg6_l_inner">
+    <visual>
+      <origin xyz="-0.010551 -0.000101 -0.15763" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/l_inner.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
+
+  <link name="rg6_r_inner">
+    <visual>
+      <origin xyz="0.010449 -0.000101 -0.15763" rpy="0 0 0"/>
+      <geometry><mesh filename="package://rg6_description/meshes/r_inner.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
+
+  <!-- Gelenke: hier FIXED in Nominalpose (Offsets = die der Originalgelenke). -->
+  <joint name="rg6_g_main_joint" type="fixed">
+    <origin xyz="-0.031849 1e-06 0.04953" rpy="0 0 0"/>
+    <parent link="rg6_base_link"/><child link="rg6_g_main"/>
+  </joint>
+  <joint name="rg6_l_out_joint" type="fixed">
+    <origin xyz="0.0557 0.0128 0.085" rpy="0 0 0"/>
+    <parent link="rg6_g_main"/><child link="rg6_l_out"/>
+  </joint>
+  <joint name="rg6_r_out_joint" type="fixed">
+    <origin xyz="0.0081 0.0128 0.085" rpy="0 0 0"/>
+    <parent link="rg6_g_main"/><child link="rg6_r_out"/>
+  </joint>
+  <joint name="rg6_l_tip_joint" type="fixed">
+    <origin xyz="0.047384 -0.0253 0.06442" rpy="0 0 0"/>
+    <parent link="rg6_l_out"/><child link="rg6_l_tip"/>
+  </joint>
+  <joint name="rg6_r_tip_joint" type="fixed">
+    <origin xyz="-0.047384 -0.0253 0.064494" rpy="0 0 0"/>
+    <parent link="rg6_r_out"/><child link="rg6_r_tip"/>
+  </joint>
+  <joint name="rg6_l_passive_joint" type="fixed">
+    <origin xyz="0.0424 0.0001 0.1081" rpy="0 0 0"/>
+    <parent link="rg6_g_main"/><child link="rg6_l_inner"/>
+  </joint>
+  <joint name="rg6_r_passive_joint" type="fixed">
+    <origin xyz="0.0214 0.0001 0.1081" rpy="0 0 0"/>
+    <parent link="rg6_g_main"/><child link="rg6_r_inner"/>
+  </joint>
+
+  <!-- Greifer-TCP -->
+  <link name="rg6_hand_tcp"/>
+  <joint name="rg6_hand_tcp_joint" type="fixed">
+    <origin xyz="0.036 0 0.21" rpy="0 0 0"/>
+    <parent link="rg6_g_main"/><child link="rg6_hand_tcp"/>
+  </joint>
+
+  <!--
+    AUF/ZU-ANIMATION (optional): die 'fixed'-Greifer-Gelenke wieder auf 'revolute'
+    mit axis/limit/mimic wie im Original setzen (rg6_l_out_joint als Treiber,
+    die anderen mit <mimic joint="rg6_l_out_joint" .../>). Dann braucht es aber
+    eine joint_states-Quelle fuer rg6_l_out_joint, sonst meckert robot_state_publisher.
+  -->
+</robot>

@@ -121,34 +121,54 @@
     </visual>
   </link>
 
-  <!-- Gelenke: hier FIXED in Nominalpose (Offsets = die der Originalgelenke). -->
+  <!-- Gelenke: g_main + hand_tcp fixed; Finger revolute+mimic fuer Auf/Zu-Animation.
+       TREIBER = 'rg6-l_out_joint' (Bindestrich!) -> exakt der Name, den der
+       rg6_joint_state_broadcaster publiziert. Alle anderen Finger folgen per <mimic>,
+       brauchen also KEINE eigene joint_states-Quelle. axis/limit/mimic wie im Original. -->
   <joint name="rg6_g_main_joint" type="fixed">
     <origin xyz="-0.031849 1e-06 0.04953" rpy="0 0 0"/>
     <parent link="rg6_base_link"/><child link="rg6_g_main"/>
   </joint>
-  <joint name="rg6_l_out_joint" type="fixed">
+  <joint name="rg6-l_out_joint" type="revolute">
     <origin xyz="0.0557 0.0128 0.085" rpy="0 0 0"/>
     <parent link="rg6_g_main"/><child link="rg6_l_out"/>
+    <axis xyz="0 1 0"/>
+    <limit upper="0.610865" lower="-0.75" effort="100" velocity="100"/>
   </joint>
-  <joint name="rg6_r_out_joint" type="fixed">
+  <joint name="rg6_r_out_joint" type="revolute">
     <origin xyz="0.0081 0.0128 0.085" rpy="0 0 0"/>
     <parent link="rg6_g_main"/><child link="rg6_r_out"/>
+    <axis xyz="0 1 0"/>
+    <limit upper="0.523599" lower="-0.610865" effort="100" velocity="100"/>
+    <mimic joint="rg6-l_out_joint" multiplier="-1"/>
   </joint>
-  <joint name="rg6_l_tip_joint" type="fixed">
+  <joint name="rg6_l_tip_joint" type="revolute">
     <origin xyz="0.047384 -0.0253 0.06442" rpy="0 0 0"/>
     <parent link="rg6_l_out"/><child link="rg6_l_tip"/>
+    <axis xyz="0 -1 0"/>
+    <limit upper="0.610865" lower="-0.523599" effort="100" velocity="100"/>
+    <mimic joint="rg6-l_out_joint" multiplier="1"/>
   </joint>
-  <joint name="rg6_r_tip_joint" type="fixed">
+  <joint name="rg6_r_tip_joint" type="revolute">
     <origin xyz="-0.047384 -0.0253 0.064494" rpy="0 0 0"/>
     <parent link="rg6_r_out"/><child link="rg6_r_tip"/>
+    <axis xyz="0 -1 0"/>
+    <limit upper="0.523599" lower="-0.610865" effort="100" velocity="100"/>
+    <mimic joint="rg6-l_out_joint" multiplier="-1"/>
   </joint>
-  <joint name="rg6_l_passive_joint" type="fixed">
+  <joint name="rg6_l_passive_joint" type="revolute">
     <origin xyz="0.0424 0.0001 0.1081" rpy="0 0 0"/>
     <parent link="rg6_g_main"/><child link="rg6_l_inner"/>
+    <axis xyz="0 -1 0"/>
+    <limit upper="0.523599" lower="-0.610865" effort="100" velocity="100"/>
+    <mimic joint="rg6-l_out_joint" multiplier="-1"/>
   </joint>
-  <joint name="rg6_r_passive_joint" type="fixed">
+  <joint name="rg6_r_passive_joint" type="revolute">
     <origin xyz="0.0214 0.0001 0.1081" rpy="0 0 0"/>
     <parent link="rg6_g_main"/><child link="rg6_r_inner"/>
+    <axis xyz="0 1 0"/>
+    <limit upper="0.523599" lower="-0.610865" effort="100" velocity="100"/>
+    <mimic joint="rg6-l_out_joint" multiplier="-1"/>
   </joint>
 
   <!-- Greifer-TCP -->
@@ -159,9 +179,10 @@
   </joint>
 
   <!--
-    AUF/ZU-ANIMATION (optional): die 'fixed'-Greifer-Gelenke wieder auf 'revolute'
-    mit axis/limit/mimic wie im Original setzen (rg6_l_out_joint als Treiber,
-    die anderen mit <mimic joint="rg6_l_out_joint" .../>). Dann braucht es aber
-    eine joint_states-Quelle fuer rg6_l_out_joint, sonst meckert robot_state_publisher.
+    AUF/ZU-ANIMATION: aktiv. Treiber 'rg6-l_out_joint' wird vom
+    rg6_joint_state_broadcaster aus tool_data.analog_input2 gespeist. Damit der
+    Greifer animiert, muss dessen joint_states auf dem Topic landen, das der
+    Greifer-rendernde robot_state_publisher konsumiert (siehe rg6_bringup.launch.py
+    Argument 'js_topic').
   -->
 </robot>

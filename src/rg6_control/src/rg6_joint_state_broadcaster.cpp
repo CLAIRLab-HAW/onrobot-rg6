@@ -5,17 +5,15 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 
 // Mappt tool_data.analog_input2 (Greiferweite) linear auf den Treiber-Gelenkwinkel
-// 'rg6-l_out_joint' und publiziert ihn als joint_states -> Greifer-Animation.
+// 'rg6_finger_joint' (Modell onrobot_rg6_visualization) und publiziert ihn als
+// joint_states -> Greifer-Animation. Konvention: 0 = offen, positiv = zu.
 //
-// WICHTIG: Der vereinfachte URDF-Greifer (jeder Finger = EIN starrer Link, der um
-// sein Aussengelenk schwenkt) braucht einen viel KLEINEREN und gegen 0 verschobenen
-// Winkelbereich als die echte Linkage. Sonst klappen die Finger an einem Ende weit
-// auf und kreuzen sich am anderen. Deshalb sind die 4 Mapping-Werte LIVE-Parameter:
+// Die 4 Mapping-Werte sind LIVE-Parameter (in Foxglove justierbar):
 //   in_closed / in_open  : analog_input2 bei physisch zu / auf  (ros2 topic echo tool_data)
-//   angle_closed/angle_open : zugehoeriger Gelenkwinkel (in Foxglove einstellen)
+//   angle_closed/angle_open : zugehoeriger rg6_finger_joint-Winkel (0=offen, +=zu)
 // Live tunen, z.B.:
-//   ros2 param set /a200_0553/manipulators/tooldata_to_jointstate angle_closed -0.40
-//   ros2 param set /a200_0553/manipulators/tooldata_to_jointstate angle_open    0.15
+//   ros2 param set /a200_0553/manipulators/tooldata_to_jointstate angle_closed 0.6
+//   ros2 param set /a200_0553/manipulators/tooldata_to_jointstate angle_open   0.0
 // Wenn passend: die Defaults hier eintragen.
 
 class ToolDataToJointStateNode : public rclcpp::Node
@@ -26,8 +24,8 @@ public:
     // Startwerte = grobe Schaetzung; bitte live nachjustieren (siehe oben).
     in_closed_    = this->declare_parameter<double>("in_closed", 0.56);
     in_open_      = this->declare_parameter<double>("in_open", 10.0);
-    angle_closed_ = this->declare_parameter<double>("angle_closed", -0.40);
-    angle_open_   = this->declare_parameter<double>("angle_open", 0.15);
+    angle_closed_ = this->declare_parameter<double>("angle_closed", 0.6);
+    angle_open_   = this->declare_parameter<double>("angle_open", 0.0);
 
     // Relative Namen -> im Namespace aufloesbar (z.B. /a200_0553/manipulators).
     // 'joint_states' wird per Launch-Remap auf das Topic des Greifer-rendernden
@@ -64,7 +62,7 @@ private:
 
     auto joint_msg = sensor_msgs::msg::JointState();
     joint_msg.header.stamp = this->get_clock()->now();
-    joint_msg.name = {"rg6-l_out_joint"};
+    joint_msg.name = {"rg6_finger_joint"};
     joint_msg.position = {gripper_position};
     pub_->publish(joint_msg);
   }

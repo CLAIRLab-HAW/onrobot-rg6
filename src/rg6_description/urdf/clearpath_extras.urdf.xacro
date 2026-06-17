@@ -11,27 +11,21 @@
     - arm_0_tool0   = UR5 Tool-Frame (ROS-Industrial all-zeros)  -> RG6-Greifer
     - default_mount = Frame, auf dem der ArUco-Marker sitzt (TODO anpassen)
 
-  WICHTIG:
-    * Alle Greifer-Links sind mit 'rg6_' praefixiert -> KEINE Kollision mit base_link.
-    * rg6_description muss in einem in robot.yaml eingetragenen Workspace liegen.
+  GREIFERMODELL:
+    Sauber artikuliertes RG6 aus package 'onrobot_rg6_visualization' (Robotiq-Stil:
+    outer_knuckle/inner_knuckle/inner_finger pro Seite, getrennte visual/collision-
+    Meshes). Treibergelenk = 'rg6_finger_joint' (Praefix 'rg6_'): 0 = offen,
+    positiv = zu. Alle anderen Greifergelenke folgen per <mimic> -> die
+    Parallelogramm-Schleife bleibt geschlossen, nichts zerfaellt.
+    Der rg6_joint_state_broadcaster speist 'rg6_finger_joint'.
 
-  ANIMATION (Auf/Zu):
-    Die RG6-Meshes sind im SolidWorks-Export ALLE im Basis-Frame authored (jedes
-    Mesh sitzt korrekt, wenn es bei xyz=0 an rg6_base_link haengt). Die reale
-    Kinematik ist ein 4-Gelenk-Parallelogramm pro Finger; das laesst sich im
-    URDF-Baum nur ungenau per mimic abbilden und ZERFAELLT bei Bewegung.
-    Daher hier vereinfacht: jeder Finger = EIN starrer Link (out+tip+inner), der um
-    sein Aussengelenk schwenkt. Treibergelenk 'rg6-l_out_joint' wird vom
-    rg6_joint_state_broadcaster aus tool_data.analog_input2 gespeist; der rechte
-    Finger folgt per <mimic multiplier="-1"> -> symmetrisches Auf/Zu, nichts zerfaellt.
-    Pivot/Visual-Offsets sind die globalen Aussengelenk-Positionen:
-        links  = base->g_main + g_main->l_out = (0.023851, 0.012801, 0.13453)
-        rechts = base->g_main + g_main->r_out = (-0.023749, 0.012801, 0.13453)
+  VORAUSSETZUNG: sowohl 'rg6_description' (falls weiter genutzt) als auch
+  'onrobot_rg6_visualization' muessen in einem in robot.yaml unter
+  'system.ros2.workspaces' eingetragenen Workspace installiert sein, sonst findet
+  die foxglove_bridge die package://-Meshes nicht.
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <xacro:include filename="$(find rg6_description)/urdf/materials.xacro"/>
-  <material name="black"><color rgba="0.165 0.165 0.165 1.0"/></material>
   <material name="white"><color rgba="0.9137 0.9137 0.9137 1.0"/></material>
 
   <!-- =========================== ArUco-Marker =========================== -->
@@ -49,119 +43,25 @@
   </joint>
 
   <!-- ===================== RG6-Greifer an arm_0_tool0 =================== -->
-  <!-- rpy: Roll -90deg um X (empirisch bestaetigt fuer arm_0_tool0). -->
+  <!-- Greifermodell instanziieren (Praefix 'rg6_'). -->
+  <xacro:include filename="$(find onrobot_rg6_visualization)/urdf/onrobot_rg6_model_macro.xacro"/>
+  <xacro:onrobot_rg6 prefix="rg6_"/>
+
+  <!-- Greiferbasis an den Tool-Flansch.
+       rpy ggf. anpassen (in Foxglove pruefen): das neue Modell hat ein anderes
+       Mesh-Frame als das alte; Startwert 0 0 0. Falls verkippt/verdreht, je 90deg:
+         rpy="-1.5708 0 0" | rpy="1.5708 0 0" | rpy="0 0 1.5708" ... -->
   <joint name="rg6_tool0_to_base" type="fixed">
     <parent link="arm_0_tool0"/>
-    <child link="rg6_base_link"/>
-    <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
+    <child link="rg6_onrobot_rg6_base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
-  <!-- ===== statische Teile ===== -->
-  <link name="rg6_base_link">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="silver"/>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
-    </collision>
-  </link>
-
-  <link name="rg6_g_main">
-    <visual>
-      <origin xyz="0.031849 -1e-06 -0.04953" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/g_main.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="silver"/>
-    </visual>
-    <collision>
-      <origin xyz="0.031849 -1e-06 -0.04953" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/g_main.stl" scale="0.001 0.001 0.001"/></geometry>
-    </collision>
-  </link>
-
-  <!-- ===== linker Finger als EIN starrer Link (out + tip + inner) ===== -->
-  <link name="rg6_left_finger">
-    <visual>
-      <origin xyz="-0.023851 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/l_out.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="silver"/>
-    </visual>
-    <visual>
-      <origin xyz="-0.023851 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/l_inner.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="silver"/>
-    </visual>
-    <visual>
-      <origin xyz="-0.023851 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/l_tip.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="black"/>
-    </visual>
-    <collision>
-      <origin xyz="-0.023851 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/l_out.stl" scale="0.001 0.001 0.001"/></geometry>
-    </collision>
-    <collision>
-      <origin xyz="-0.023851 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/l_tip.stl" scale="0.001 0.001 0.001"/></geometry>
-    </collision>
-  </link>
-
-  <!-- ===== rechter Finger als EIN starrer Link (out + tip + inner) ===== -->
-  <link name="rg6_right_finger">
-    <visual>
-      <origin xyz="0.023749 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/r_out.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="silver"/>
-    </visual>
-    <visual>
-      <origin xyz="0.023749 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/r_inner.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="silver"/>
-    </visual>
-    <visual>
-      <origin xyz="0.023749 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/r_tip.stl" scale="0.001 0.001 0.001"/></geometry>
-      <material name="black"/>
-    </visual>
-    <collision>
-      <origin xyz="0.023749 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/r_out.stl" scale="0.001 0.001 0.001"/></geometry>
-    </collision>
-    <collision>
-      <origin xyz="0.023749 -0.012801 -0.13453" rpy="0 0 0"/>
-      <geometry><mesh filename="package://rg6_description/meshes/r_tip.stl" scale="0.001 0.001 0.001"/></geometry>
-    </collision>
-  </link>
-
-  <!-- ===== Gelenke ===== -->
-  <joint name="rg6_g_main_joint" type="fixed">
-    <origin xyz="-0.031849 1e-06 0.04953" rpy="0 0 0"/>
-    <parent link="rg6_base_link"/><child link="rg6_g_main"/>
-  </joint>
-
-  <!-- TREIBER: vom rg6_joint_state_broadcaster gesetzt. Pivot = linkes Aussengelenk. -->
-  <joint name="rg6-l_out_joint" type="revolute">
-    <origin xyz="0.023851 0.012801 0.13453" rpy="0 0 0"/>
-    <parent link="rg6_base_link"/><child link="rg6_left_finger"/>
-    <axis xyz="0 1 0"/>
-    <limit upper="0.610865" lower="-0.75" effort="100" velocity="100"/>
-  </joint>
-
-  <joint name="rg6_right_finger_joint" type="revolute">
-    <origin xyz="-0.023749 0.012801 0.13453" rpy="0 0 0"/>
-    <parent link="rg6_base_link"/><child link="rg6_right_finger"/>
-    <axis xyz="0 1 0"/>
-    <limit upper="0.610865" lower="-0.75" effort="100" velocity="100"/>
-    <mimic joint="rg6-l_out_joint" multiplier="-1"/>
-  </joint>
-
-  <!-- Greifer-TCP -->
+  <!-- Greifer-TCP (mittig zwischen den Fingerspitzen, grob). -->
   <link name="rg6_hand_tcp"/>
   <joint name="rg6_hand_tcp_joint" type="fixed">
-    <origin xyz="0.036 0 0.21" rpy="0 0 0"/>
-    <parent link="rg6_g_main"/><child link="rg6_hand_tcp"/>
+    <origin xyz="0 0 0.21" rpy="0 0 0"/>
+    <parent link="rg6_onrobot_rg6_base_link"/><child link="rg6_hand_tcp"/>
   </joint>
 
 </robot>

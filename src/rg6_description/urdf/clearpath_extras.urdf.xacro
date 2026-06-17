@@ -63,4 +63,20 @@
     <parent link="rg6_onrobot_rg6_base_link"/><child link="rg6_hand_tcp"/>
   </joint>
 
+  <!-- ===== Custom Top-Assembly (ersetzt a200.sensor_arch) ===== -->
+  <link name="husky_top_assembly">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://onrobot_rg6_visualization/meshes/husky_top_assembly.dae"/>
+        <!-- falls nicht in Metern exportiert: scale="0.001 0.001 0.001" am mesh ergaenzen -->
+      </geometry>
+    </visual>
+  </link>
+  <joint name="husky_top_assembly_joint" type="fixed">
+    <parent link="default_mount"/>      <!-- TODO: realer Mount-Frame aus Schritt 1 -->
+    <child link="husky_top_assembly"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>   <!-- TODO: Offset aus Schritt 1 -->
+  </joint>
+
 </robot>

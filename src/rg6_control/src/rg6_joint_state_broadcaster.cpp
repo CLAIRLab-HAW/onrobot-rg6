@@ -1,24 +1,37 @@
 #include <algorithm>
+#include <cmath>
 #include "rclcpp/rclcpp.hpp"
 #include "ur_msgs/msg/tool_data_msg.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
-// Winkel an den Eingangsgrenzen. Richtung getauscht (offen<->zu war gespiegelt):
-// analog=min_in -> max_angle, analog=max_in -> min_angle.
-#define min_in 0.56
-#define max_in 10.0
-#define min_angle 0.6
-#define max_angle -0.62
+
+// Mappt tool_data.analog_input2 (Greiferweite) linear auf den Treiber-Gelenkwinkel
+// 'rg6-l_out_joint' und publiziert ihn als joint_states -> Greifer-Animation.
+//
+// WICHTIG: Der vereinfachte URDF-Greifer (jeder Finger = EIN starrer Link, der um
+// sein Aussengelenk schwenkt) braucht einen viel KLEINEREN und gegen 0 verschobenen
+// Winkelbereich als die echte Linkage. Sonst klappen die Finger an einem Ende weit
+// auf und kreuzen sich am anderen. Deshalb sind die 4 Mapping-Werte LIVE-Parameter:
+//   in_closed / in_open  : analog_input2 bei physisch zu / auf  (ros2 topic echo tool_data)
+//   angle_closed/angle_open : zugehoeriger Gelenkwinkel (in Foxglove einstellen)
+// Live tunen, z.B.:
+//   ros2 param set /a200_0553/manipulators/tooldata_to_jointstate angle_closed -0.40
+//   ros2 param set /a200_0553/manipulators/tooldata_to_jointstate angle_open    0.15
+// Wenn passend: die Defaults hier eintragen.
 
 class ToolDataToJointStateNode : public rclcpp::Node
 {
 public:
   ToolDataToJointStateNode() : Node("tooldata_to_jointstate")
   {
-    // Relative Namen -> aufloesbar im Namespace (z.B. /a200_0553/manipulators).
-    // 'joint_states' (relativ) landet damit auf dem joint_states-Topic, das der
-    // Manipulator-robot_state_publisher konsumiert -> Greifer wird mit animiert.
-    // WICHTIG: setzt voraus, dass das Greifer-Gelenk im URDF REVOLUTE+mimic ist
-    // und exakt so heisst wie joint_msg.name unten.
+    // Startwerte = grobe Schaetzung; bitte live nachjustieren (siehe oben).
+    in_closed_    = this->declare_parameter<double>("in_closed", 0.56);
+    in_open_      = this->declare_parameter<double>("in_open", 10.0);
+    angle_closed_ = this->declare_parameter<double>("angle_closed", -0.40);
+    angle_open_   = this->declare_parameter<double>("angle_open", 0.15);
+
+    // Relative Namen -> im Namespace aufloesbar (z.B. /a200_0553/manipulators).
+    // 'joint_states' wird per Launch-Remap auf das Topic des Greifer-rendernden
+    // robot_state_publisher gelegt (a200-0553: /a200_0553/platform/joint_states).
     pub_ = this->create_publisher<sensor_msgs::msg::JointState>("joint_states", 10);
     sub_ = this->create_subscription<ur_msgs::msg::ToolDataMsg>(
       "io_and_status_controller/tool_data", rclcpp::SensorDataQoS(),
@@ -28,25 +41,35 @@ public:
 private:
   void tooldata_callback(const ur_msgs::msg::ToolDataMsg::SharedPtr msg)
   {
-    auto joint_msg = sensor_msgs::msg::JointState();
-    
-    auto analog_input = msg->analog_input2;
-    double gripper_position = min_angle + (analog_input - min_in) * (max_angle - min_angle) / (max_in - min_in);
+    // Live-Parameter pro Sample lesen -> sofort wirksam beim Tunen.
+    const double in_closed    = this->get_parameter("in_closed").as_double();
+    const double in_open      = this->get_parameter("in_open").as_double();
+    const double angle_closed = this->get_parameter("angle_closed").as_double();
+    const double angle_open   = this->get_parameter("angle_open").as_double();
+
+    const double analog_input = msg->analog_input2;
+    double gripper_position = angle_closed;
+    const double span_in = in_open - in_closed;
+    if (std::abs(span_in) > 1e-9) {
+      gripper_position = angle_closed +
+        (analog_input - in_closed) * (angle_open - angle_closed) / span_in;
+    }
 
     // Klemmen: ein unerwarteter analog_input2-Wert (falsche Einheit/Bereich) darf
-    // das Gelenk nicht ueber den gueltigen Bereich hinaus treiben -> Modell bliebe
-    // sonst "zerpflueckt". Reihenfolge-unabhaengig (min_angle/max_angle getauscht).
-    const double lo = std::min(min_angle, max_angle);
-    const double hi = std::max(min_angle, max_angle);
+    // das Gelenk nicht ueber den gueltigen Bereich hinaus treiben -> sonst
+    // "zerpflueckt". Reihenfolge-unabhaengig (angle_closed/angle_open beliebig).
+    const double lo = std::min(angle_closed, angle_open);
+    const double hi = std::max(angle_closed, angle_open);
     gripper_position = std::clamp(gripper_position, lo, hi);
 
+    auto joint_msg = sensor_msgs::msg::JointState();
     joint_msg.header.stamp = this->get_clock()->now();
     joint_msg.name = {"rg6-l_out_joint"};
     joint_msg.position = {gripper_position};
-
     pub_->publish(joint_msg);
   }
 
+  double in_closed_, in_open_, angle_closed_, angle_open_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr pub_;
   rclcpp::Subscription<ur_msgs::msg::ToolDataMsg>::SharedPtr sub_;
 };
@@ -58,4 +81,3 @@ int main(int argc, char* argv[])
   rclcpp::shutdown();
   return 0;
 }
-

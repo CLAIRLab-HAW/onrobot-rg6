@@ -1,10 +1,13 @@
+#include <algorithm>
 #include "rclcpp/rclcpp.hpp"
 #include "ur_msgs/msg/tool_data_msg.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+// Winkel an den Eingangsgrenzen. Richtung getauscht (offen<->zu war gespiegelt):
+// analog=min_in -> max_angle, analog=max_in -> min_angle.
 #define min_in 0.56
 #define max_in 10.0
-#define min_angle -0.62
-#define max_angle 0.6
+#define min_angle 0.6
+#define max_angle -0.62
 
 class ToolDataToJointStateNode : public rclcpp::Node
 {
@@ -31,10 +34,11 @@ private:
     double gripper_position = min_angle + (analog_input - min_in) * (max_angle - min_angle) / (max_in - min_in);
 
     // Klemmen: ein unerwarteter analog_input2-Wert (falsche Einheit/Bereich) darf
-    // das Gelenk nicht ueber die URDF-Limits hinaus treiben -> Modell bliebe sonst
-    // "zerpflueckt". min_angle < max_angle.
-    if (gripper_position < min_angle) gripper_position = min_angle;
-    if (gripper_position > max_angle) gripper_position = max_angle;
+    // das Gelenk nicht ueber den gueltigen Bereich hinaus treiben -> Modell bliebe
+    // sonst "zerpflueckt". Reihenfolge-unabhaengig (min_angle/max_angle getauscht).
+    const double lo = std::min(min_angle, max_angle);
+    const double hi = std::max(min_angle, max_angle);
+    gripper_position = std::clamp(gripper_position, lo, hi);
 
     joint_msg.header.stamp = this->get_clock()->now();
     joint_msg.name = {"rg6-l_out_joint"};

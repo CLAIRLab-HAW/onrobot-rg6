@@ -16,12 +16,8 @@
           <color rgba="0.8 0.8 0.8 1" />
         </material>
       </visual>
-      <collision>
-        <origin xyz="0 0 0" rpy="0 0 0" />
-        <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/collision/base_link.stl" />
-        </geometry>
-      </collision>
+      <!-- collision weggelassen: Greifer ist Anzeige-only; mit collision kollidiert
+           die Basis am Flansch/Handgelenk -> MoveIt-Startzustand "in Kollision". -->
     </link>
   </xacro:macro>
 

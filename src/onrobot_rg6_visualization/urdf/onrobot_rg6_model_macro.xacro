@@ -20,12 +20,8 @@
           <color rgba="0.8 0.8 0.8 1" />
         </material>
       </visual>
-      <collision>
-        <origin xyz="0 0 0" rpy="0 0 0" />
-        <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/collision/outer_knuckle.stl" />
-        </geometry>
-      </collision>
+      <!-- collision bewusst weggelassen: 4-Gelenk-Schleife im URDF-Baum -> sonst
+           Selbstkollision -> MoveIt-Planung schlaegt fehl. Greifer ist Anzeige-only. -->
     </link>
   </xacro:macro>
 
@@ -45,12 +41,7 @@
           <color rgba="0.8 0.8 0.8 1" />
         </material>
       </visual>
-      <collision>
-        <origin xyz="0 0 0" rpy="0 0 0" />
-        <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/collision/inner_knuckle.stl" />
-        </geometry>
-      </collision>
+      <!-- collision weggelassen (siehe outer_knuckle). -->
     </link>
   </xacro:macro>
 
@@ -70,12 +61,7 @@
           <color rgba="0.1 0.1 0.1 1" />
         </material>
       </visual>
-      <collision>
-        <origin xyz="0 0 0" rpy="0 0 0" />
-        <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/collision/inner_finger.stl" />
-        </geometry>
-      </collision>
+      <!-- collision weggelassen (siehe outer_knuckle). -->
     </link>
   </xacro:macro>
 

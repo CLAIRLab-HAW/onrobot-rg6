@@ -47,14 +47,13 @@
   <xacro:include filename="$(find onrobot_rg6_visualization)/urdf/onrobot_rg6_model_macro.xacro"/>
   <xacro:onrobot_rg6 prefix="rg6_"/>
 
-  <!-- Greiferbasis an den Tool-Flansch.
-       rpy ggf. anpassen (in Foxglove pruefen): das neue Modell hat ein anderes
-       Mesh-Frame als das alte; Startwert 0 0 0. Falls verkippt/verdreht, je 90deg:
-         rpy="-1.5708 0 0" | rpy="1.5708 0 0" | rpy="0 0 1.5708" ... -->
+  <!-- Greiferbasis an den Tool-Flansch. Modell-Achse = +Z (wie altes Modell),
+       daher Roll -90deg um X. Falls noch verdreht, je 90deg variieren:
+         rpy="1.5708 0 0" | rpy="0 0 1.5708" | rpy="0 0 -1.5708" -->
   <joint name="rg6_tool0_to_base" type="fixed">
     <parent link="arm_0_tool0"/>
     <child link="rg6_onrobot_rg6_base_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="-1.5708 0 0"/>
   </joint>
 
   <!-- Greifer-TCP (mittig zwischen den Fingerspitzen, grob). -->

@@ -68,7 +68,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://onrobot_rg6_visualization/meshes/husky_top_assembly.dae"/>
+        <mesh filename="package://onrobot_rg6_visualization/meshes/husky_sensor_arch.stl"/>
         <!-- falls nicht in Metern exportiert: scale="0.001 0.001 0.001" am mesh ergaenzen -->
       </geometry>
     </visual>

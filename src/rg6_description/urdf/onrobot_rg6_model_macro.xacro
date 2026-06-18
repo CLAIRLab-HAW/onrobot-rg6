@@ -14,7 +14,7 @@
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/visual/outer_knuckle.stl" />
+          <mesh filename="package://rg6_description/meshes/visual/outer_knuckle.stl" />
         </geometry>
         <material name="rg6_silver">
           <color rgba="0.8 0.8 0.8 1" />
@@ -35,7 +35,7 @@
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/visual/inner_knuckle.stl" />
+          <mesh filename="package://rg6_description/meshes/visual/inner_knuckle.stl" />
         </geometry>
         <material name="rg6_silver">
           <color rgba="0.8 0.8 0.8 1" />
@@ -55,7 +55,7 @@
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/visual/inner_finger.stl" />
+          <mesh filename="package://rg6_description/meshes/visual/inner_finger.stl" />
         </geometry>
         <material name="rg6_black">
           <color rgba="0.1 0.1 0.1 1" />
@@ -85,7 +85,7 @@
     </joint>
   </xacro:macro>
 
-  <xacro:include filename="$(find onrobot_rg6_visualization)/urdf/onrobot_rg6.xacro" />
+  <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg6.xacro" />
 
   <xacro:macro name="finger_joint" params="prefix">
     <joint name="${prefix}finger_joint" type="revolute">

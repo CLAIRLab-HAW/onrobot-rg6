@@ -6,7 +6,7 @@
 #include "sensor_msgs/msg/joint_state.hpp"
 
 // Mappt tool_data.analog_input2 (Greiferweite) linear auf den Treiber-Gelenkwinkel
-// 'rg6_finger_joint' (Modell onrobot_rg6_visualization) und publiziert ihn als
+// 'rg6_finger_joint' (Modell rg6_description) und publiziert ihn als
 // joint_states -> Greifer-Animation. Konvention: 0 = offen, positiv = zu.
 //
 // WICHTIG: Im Modell sind ALLE Greifergelenke revolute. Der robot_state_publisher

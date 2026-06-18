@@ -10,7 +10,7 @@
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <mesh filename="package://onrobot_rg6_visualization/meshes/visual/base_link.stl" />
+          <mesh filename="package://rg6_description/meshes/visual/base_link.stl" />
         </geometry>
         <material name="rg6_silver">
           <color rgba="0.8 0.8 0.8 1" />

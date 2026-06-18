@@ -12,15 +12,14 @@
     - default_mount = Frame, auf dem der ArUco-Marker sitzt (TODO anpassen)
 
   GREIFERMODELL:
-    Sauber artikuliertes RG6 aus package 'onrobot_rg6_visualization' (Robotiq-Stil:
-    outer_knuckle/inner_knuckle/inner_finger pro Seite, getrennte visual/collision-
-    Meshes). Treibergelenk = 'rg6_finger_joint' (Praefix 'rg6_'): 0 = offen,
-    positiv = zu. Alle anderen Greifergelenke folgen per <mimic> -> die
-    Parallelogramm-Schleife bleibt geschlossen, nichts zerfaellt.
-    Der rg6_joint_state_broadcaster speist 'rg6_finger_joint'.
+    Sauber artikuliertes RG6 aus package 'rg6_description' (Robotiq-Stil:
+    outer_knuckle/inner_knuckle/inner_finger pro Seite). Treibergelenk =
+    'rg6_finger_joint' (Praefix 'rg6_'): 0 = offen, positiv = zu. Der
+    rg6_joint_state_broadcaster setzt ALLE 6 Greifergelenke EXPLIZIT (kein
+    <mimic> - das loesen manche URDF-Parser/Foxglove nicht zuverlaessig auf).
+    Kollision = eine grobe Box am base_link (keine Selbstkollision in MoveIt).
 
-  VORAUSSETZUNG: sowohl 'rg6_description' (falls weiter genutzt) als auch
-  'onrobot_rg6_visualization' muessen in einem in robot.yaml unter
+  VORAUSSETZUNG: 'rg6_description' muss in einem in robot.yaml unter
   'system.ros2.workspaces' eingetragenen Workspace installiert sein, sonst findet
   die foxglove_bridge die package://-Meshes nicht.
 -->
@@ -44,7 +43,7 @@
 
   <!-- ===================== RG6-Greifer an arm_0_tool0 =================== -->
   <!-- Greifermodell instanziieren (Praefix 'rg6_'). -->
-  <xacro:include filename="$(find onrobot_rg6_visualization)/urdf/onrobot_rg6_model_macro.xacro"/>
+  <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg6_model_macro.xacro"/>
   <xacro:onrobot_rg6 prefix="rg6_"/>
 
   <!-- Greiferbasis an den Tool-Flansch. Modell-Achse = +Z (wie altes Modell),
@@ -72,7 +71,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
       <geometry>
-        <mesh filename="package://onrobot_rg6_visualization/meshes/husky_sensor_arch.gltf"/>
+        <mesh filename="package://rg6_description/meshes/husky_sensor_arch.gltf"/>
       </geometry>
     </visual>
   </link>

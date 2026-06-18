@@ -16,8 +16,19 @@
           <color rgba="0.8 0.8 0.8 1" />
         </material>
       </visual>
-      <!-- collision weggelassen: Greifer ist Anzeige-only; mit collision kollidiert
-           die Basis am Flansch/Handgelenk -> MoveIt-Startzustand "in Kollision". -->
+      <!-- EINE grobe Huell-Box fuer den GANZEN Greifer (Basis+Finger), statt
+           filigraner Einzel-Meshes. Ein einziger Kollisionskoerper -> keine
+           Selbstkollision (war die MoveIt-Planungsblockade), aber Greifer wird
+           gegen Arm/Umgebung geprueft. Box liegt +z (vor dem Flansch), reicht
+           NICHT in arm_0_wrist_3_link zurueck -> kein Handgelenk-Falschtreffer.
+           Masse aus Greifer-Huellmass (offen): x +-0.05, y +-0.09, z 0.02..0.27.
+           Bei Bedarf in RViz (Collision Enabled) nachziehen. -->
+      <collision>
+        <origin xyz="0 0 0.145" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.11 0.19 0.25"/>
+        </geometry>
+      </collision>
     </link>
   </xacro:macro>
 

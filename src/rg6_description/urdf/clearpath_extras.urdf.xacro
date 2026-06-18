@@ -66,17 +66,21 @@
   <!-- ===== Custom Top-Assembly (ersetzt a200.sensor_arch) ===== -->
   <link name="husky_top_assembly">
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <!-- Visual-Origin "nullt" das Mesh: rpy dreht es aufrecht, xyz schiebt den
+           Fuss-Mittelpunkt auf den Link-Ursprung (CAD-Versatz nach Drehung:
+           x 0.31, y 0.30, z -0.265 -> Gegenvektor hier). -->
+      <origin xyz="-0.31 -0.30 0.265" rpy="-1.5708 0 0"/>
       <geometry>
         <mesh filename="package://onrobot_rg6_visualization/meshes/husky_sensor_arch.stl"/>
-        <!-- falls nicht in Metern exportiert: scale="0.001 0.001 0.001" am mesh ergaenzen -->
       </geometry>
     </visual>
   </link>
   <joint name="husky_top_assembly_joint" type="fixed">
-    <parent link="default_mount"/>      <!-- TODO: realer Mount-Frame aus Schritt 1 -->
+    <parent link="top_plate_back_mount"/>
     <child link="husky_top_assembly"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>   <!-- TODO: Offset aus Schritt 1 -->
+    <!-- Origin 0 0 0 = Fuss-Mittelpunkt sitzt exakt auf top_plate_back_mount.
+         Hier intuitiv nachschieben (z hoch, x vor/zurueck, y links/rechts). -->
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
 </robot>

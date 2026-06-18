@@ -32,14 +32,14 @@
   <!-- TODO: MARKER_PARENT + Offset an die reale Position anpassen. -->
   <link name="aruco_marker">
     <visual>
-      <geometry><box size="0.127 0.127 0.001"/></geometry>
+      <geometry><box size="0.11 0.11 0.001"/></geometry>
       <material name="white"/>
     </visual>
   </link>
   <joint name="aruco_to_base" type="fixed">
-    <parent link="default_mount"/>          <!-- TODO: korrektes Frame -->
+    <parent link="top_plate_front_mount"/>          <!-- TODO: korrektes Frame -->
     <child link="aruco_marker"/>
-    <origin rpy="0 0 0" xyz="0.048 -0.134 0"/>  <!-- TODO: realer Offset -->
+    <origin rpy="0 0 0" xyz="-0.062 -0.142 0"/>  <!-- TODO: realer Offset -->
   </joint>
 
   <!-- ===================== RG6-Greifer an arm_0_tool0 =================== -->
@@ -66,21 +66,17 @@
   <!-- ===== Custom Top-Assembly (ersetzt a200.sensor_arch) ===== -->
   <link name="husky_top_assembly">
     <visual>
-      <!-- Visual-Origin "nullt" das Mesh: rpy dreht es aufrecht, xyz schiebt den
-           Fuss-Mittelpunkt auf den Link-Ursprung (CAD-Versatz nach Drehung:
-           x 0.31, y 0.30, z -0.265 -> Gegenvektor hier). -->
-      <origin xyz="-0.31 -0.30 0.265" rpy="-1.5708 0 0"/>
+      <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
       <geometry>
         <mesh filename="package://onrobot_rg6_visualization/meshes/husky_sensor_arch.stl"/>
+        <!-- falls nicht in Metern exportiert: scale="0.001 0.001 0.001" am mesh ergaenzen -->
       </geometry>
     </visual>
   </link>
   <joint name="husky_top_assembly_joint" type="fixed">
-    <parent link="top_plate_back_mount"/>
+    <parent link="top_plate_rear_mount"/>
     <child link="husky_top_assembly"/>
-    <!-- Origin 0 0 0 = Fuss-Mittelpunkt sitzt exakt auf top_plate_back_mount.
-         Hier intuitiv nachschieben (z hoch, x vor/zurueck, y links/rechts). -->
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0.315 0" rpy="0 0 0"/>
   </joint>
 
 </robot>

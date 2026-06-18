@@ -65,11 +65,14 @@
 
   <!-- ===== Custom Top-Assembly (ersetzt a200.sensor_arch) ===== -->
   <link name="husky_top_assembly">
+    <!-- glTF (selbst-enthaltend, 2 Materialien) statt STL -> Materialien sichtbar.
+         KEIN <material> hier setzen, sonst werden die glTF-Materialien ueberschrieben.
+         Hinweis: glTF ist Y-up (Onshape-Export); falls das Modell ggue. der STL um
+         90deg verkippt erscheint, rpy nachziehen (typisch +/-1.5708 um X). -->
     <visual>
       <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
       <geometry>
-        <mesh filename="package://onrobot_rg6_visualization/meshes/husky_sensor_arch.stl"/>
-        <!-- falls nicht in Metern exportiert: scale="0.001 0.001 0.001" am mesh ergaenzen -->
+        <mesh filename="package://onrobot_rg6_visualization/meshes/husky_sensor_arch.gltf"/>
       </geometry>
     </visual>
   </link>

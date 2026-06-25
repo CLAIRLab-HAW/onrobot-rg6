@@ -21,7 +21,6 @@ def generate_launch_description():
             output='screen',
             parameters=[],
             condition=UnlessCondition(gripper_sim),
-            #remappings=[('/gripper/joint_states', '/joint_states')]
         ),
         Node(
             package='rg6_control',

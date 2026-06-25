@@ -1,16 +1,6 @@
-# rg6_description_description
+# rg6_description
 URDF file of onrobot rg6 gripper based on the repository of [syuntoku14 /
 fusion2urdf](https://github.com/syuntoku14/fusion2urdf.git) and the STEP file provided by [OnRobot](https://onrobot.com/en/downloads)
-
-Visualization is launched with display.launch
-```
-$ roslaunch rg6_description_description display.launch
-```
-
-Rviz:
-
-![Alt text](/pictures/rviz.png?raw=true "Rviz")
-
 
 Note:
 

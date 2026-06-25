@@ -46,9 +46,6 @@ def generate_launch_description():
         description="joint_states-Topic fuer das Greifer-Gelenk (siehe Docstring).",
     )
 
-    # io_and_status_controller wird von Clearpath selbst gespawnt (siehe Docstring) -
-    # hier kein eigener Spawner mehr.
-
     # 1) RG6-Treiber im manipulators-Namespace (relative Namen loesen dann korrekt auf)
     rg6_control = Node(
         package="rg6_control",

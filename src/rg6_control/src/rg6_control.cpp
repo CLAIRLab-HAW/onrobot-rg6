@@ -39,25 +39,38 @@ public:
       std::bind(&RG6ControlNode::close_callback, this, std::placeholders::_1, std::placeholders::_2));
     io_client_ = this->create_client<ur_msgs::srv::SetIO>("io_and_status_controller/set_io");
 
-    // Tool-Spannung beim Start einmalig auf 24 V setzen (RG6-Stromversorgung).
-    // Verzoegert, damit der io_and_status_controller Zeit hat, hochzukommen.
+    // Tool-Spannung beim Start auf 24 V setzen (RG6-Stromversorgung). Der
+    // io_and_status_controller wird vom ur_robot_driver-Stack hochgezogen und ist
+    // u.U. erst spaeter verfuegbar -> aktiv pollen, bis set_io da ist (max. ~60 s),
+    // statt nach einem einzigen Versuch aufzugeben.
+    auto attempts = std::make_shared<int>(0);
+    constexpr int max_attempts = 30;   // 30 * 2 s = 60 s
     voltage_timer_ = this->create_wall_timer(
-      std::chrono::seconds(3),
-      [this]()
+      std::chrono::seconds(2),
+      [this, attempts, max_attempts]()
       {
-        voltage_timer_->cancel();   // einmalig
-        if (!io_client_->wait_for_service(std::chrono::seconds(2)))
+        if (io_client_->wait_for_service(std::chrono::milliseconds(100)))
         {
-          RCLCPP_WARN(this->get_logger(),
-            "RG6: set_io nicht verfuegbar - Tool-Spannung (24V) nicht gesetzt");
+          auto req = std::make_shared<ur_msgs::srv::SetIO::Request>();
+          req->fun = 4;        // FUN_SET_TOOL_VOLTAGE
+          req->pin = 0;
+          req->state = 24.0f;
+          io_client_->async_send_request(req);
+          RCLCPP_INFO(this->get_logger(), "RG6: Tool-Spannung auf 24V gesetzt");
+          voltage_timer_->cancel();
           return;
         }
-        auto req = std::make_shared<ur_msgs::srv::SetIO::Request>();
-        req->fun = 4;        // FUN_SET_TOOL_VOLTAGE
-        req->pin = 0;
-        req->state = 24.0f;
-        io_client_->async_send_request(req);
-        RCLCPP_INFO(this->get_logger(), "RG6: Tool-Spannung auf 24V gesetzt");
+        if (++(*attempts) >= max_attempts)
+        {
+          RCLCPP_ERROR(this->get_logger(),
+            "RG6: set_io nach %d Versuchen nicht verfuegbar - Tool-Spannung (24V) "
+            "NICHT gesetzt (io_and_status_controller aktiv?)", max_attempts);
+          voltage_timer_->cancel();
+          return;
+        }
+        RCLCPP_WARN(this->get_logger(),
+          "RG6: warte auf io_and_status_controller/set_io (Versuch %d/%d) ...",
+          *attempts, max_attempts);
       });
   }
 

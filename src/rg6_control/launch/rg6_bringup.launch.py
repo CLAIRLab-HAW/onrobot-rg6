@@ -2,12 +2,14 @@
 """Bringup fuer den OnRobot RG6 auf dem Clearpath-UR5.
 
 Startet:
-  1. den UR 'io_and_status_controller' (GPIOController) auf dem manipulators-
-     controller_manager -> liefert set_io + tool_data (das spawnt Clearpath nicht),
-  2. den rg6_control-Node (open_gripper/close_gripper) im manipulators-Namespace,
-  3. den rg6_joint_state_broadcaster -> mappt tool_data.analog_input2 auf das
+  1. den rg6_control-Node (open_gripper/close_gripper) im manipulators-Namespace,
+  2. den rg6_joint_state_broadcaster -> mappt tool_data.analog_input2 auf das
      Gelenk 'rg6-l_out_joint' und publiziert es als joint_states -> Greifer
      animiert im RViz/Foxglove (rg6_*-Gelenke sind revolute+mimic).
+
+Der 'io_and_status_controller' (GPIOController, liefert set_io + tool_data) wird
+NICHT mehr hier gespawnt: der ur_robot_driver-Stack (UR 3.8) bringt ihn inzwischen
+selbst hoch. rg6_control wartet beim Start aktiv auf dessen set_io-Service.
 
 Gedacht zum Einbinden ueber 'platform.extras.launch' in der robot.yaml.
 Voraussetzung: der Workspace mit rg6_control ist in robot.yaml unter
@@ -27,7 +29,6 @@ from launch_ros.actions import Node
 
 # Robotspezifisch (a200-0553):
 NAMESPACE = "/a200_0553/manipulators"
-CONTROLLER_MANAGER = "/a200_0553/manipulators/controller_manager"
 
 
 def generate_launch_description():
@@ -42,21 +43,10 @@ def generate_launch_description():
         description="joint_states-Topic fuer das Greifer-Gelenk (siehe Docstring).",
     )
 
-    # 1) io_and_status_controller laden+aktivieren (wartet auf den controller_manager).
-    #    Der Controller-TYP steht in der control.yaml (per clearpath-custom-setup
-    #    gepatcht) -> hier reicht der Name.
-    io_spawner = Node(
-        package="controller_manager",
-        executable="spawner",
-        arguments=[
-            "io_and_status_controller",
-            "-c", CONTROLLER_MANAGER,
-            "--controller-manager-timeout", "60",
-        ],
-        output="screen",
-    )
+    # io_and_status_controller wird NICHT mehr hier gespawnt (siehe Docstring) -
+    # der ur_robot_driver-Stack bringt ihn selbst hoch.
 
-    # 2) RG6-Treiber im manipulators-Namespace (relative Namen loesen dann korrekt auf)
+    # 1) RG6-Treiber im manipulators-Namespace (relative Namen loesen dann korrekt auf)
     rg6_control = Node(
         package="rg6_control",
         executable="rg6_control",
@@ -64,7 +54,7 @@ def generate_launch_description():
         output="screen",
     )
 
-    # 3) tool_data -> joint_states (Gelenk 'rg6-l_out_joint') fuer die Animation.
+    # 2) tool_data -> joint_states (Gelenk 'rg6-l_out_joint') fuer die Animation.
     #    Relativer 'joint_states'-Output wird per Remap auf js_topic gelegt.
     rg6_jsb = Node(
         package="rg6_control",
@@ -74,4 +64,4 @@ def generate_launch_description():
         remappings=[("joint_states", js_topic)],
     )
 
-    return LaunchDescription([declare_js_topic, io_spawner, rg6_control, rg6_jsb])
+    return LaunchDescription([declare_js_topic, rg6_control, rg6_jsb])

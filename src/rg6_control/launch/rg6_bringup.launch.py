@@ -8,8 +8,11 @@ Startet:
      animiert im RViz/Foxglove (rg6_*-Gelenke sind revolute+mimic).
 
 Der 'io_and_status_controller' (GPIOController, liefert set_io + tool_data) wird
-NICHT mehr hier gespawnt: der ur_robot_driver-Stack (UR 3.8) bringt ihn inzwischen
-selbst hoch. rg6_control wartet beim Start aktiv auf dessen set_io-Service.
+hier NICHT gespawnt: clearpath_manipulators/control.launch.py spawnt jeden
+Top-Level-Key der control.yaml, dessen Name 'controller' enthaelt (Schleife). Der
+clearpath-custom-setup-Patcher injiziert genau so einen Top-Level-Block fuer
+'io_and_status_controller' -> Clearpath spawnt ihn selbst (aktiv). rg6_control
+wartet beim Start aktiv auf dessen set_io-Service.
 
 Gedacht zum Einbinden ueber 'platform.extras.launch' in der robot.yaml.
 Voraussetzung: der Workspace mit rg6_control ist in robot.yaml unter
@@ -43,8 +46,8 @@ def generate_launch_description():
         description="joint_states-Topic fuer das Greifer-Gelenk (siehe Docstring).",
     )
 
-    # io_and_status_controller wird NICHT mehr hier gespawnt (siehe Docstring) -
-    # der ur_robot_driver-Stack bringt ihn selbst hoch.
+    # io_and_status_controller wird von Clearpath selbst gespawnt (siehe Docstring) -
+    # hier kein eigener Spawner mehr.
 
     # 1) RG6-Treiber im manipulators-Namespace (relative Namen loesen dann korrekt auf)
     rg6_control = Node(

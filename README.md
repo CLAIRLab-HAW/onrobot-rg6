@@ -15,14 +15,14 @@ is essentially a thin convenience layer on top of `ur_robot_driver`.
 
 ```
   ROS service                 this package                 UR driver (ur_robot_driver)
-  open_gripper / close_gripper  ──►  rg6_control  ──set_io──►  io_and_status_controller ──► UR tool DO16/DO17 ──► RG6
+  open / close  ──►  rg6_control  ──set_io──►  io_and_status_controller ──► UR tool DO16/DO17 ──► RG6
                                           ▲                                  │
                                           └────────── tool_data ◄────────────┘  (analog_input2 = width,
                                                      (force/width feedback)        analog_input3 = force)
 ```
 
-- **`rg6_control`** offers two `std_srvs/Trigger` services (`open_gripper`,
-  `close_gripper`). On call it sends a `ur_msgs/SetIO` request (function
+- **`rg6_control`** offers two `std_srvs/Trigger` services (`open`,
+  `close`). On call it sends a `ur_msgs/SetIO` request (function
   `SET_DIGITAL_OUT`, tool pin **16**) and then watches `tool_data` until the
   motion **settles** (position stable for a short time). Settling is used on
   purpose so that *clamping onto an object* (position stops, force stays high)
@@ -89,8 +89,8 @@ ros2 launch rg6_control rg6_control.launch.py
 Open / close (Trigger):
 
 ```bash
-ros2 service call /<your_ur_namespace>/rg6_control/close_gripper std_srvs/srv/Trigger
-ros2 service call /<your_ur_namespace>/rg6_control/open_gripper  std_srvs/srv/Trigger
+ros2 service call /<your_ur_namespace>/rg6_control/close std_srvs/srv/Trigger
+ros2 service call /<your_ur_namespace>/rg6_control/open  std_srvs/srv/Trigger
 ```
 
 ### Simulation (no hardware)
@@ -107,8 +107,8 @@ ros2 launch rg6_control rg6_control.launch.py gripper_sim:=true
 
 | Interface | Name (relative) | Type |
 |---|---|---|
-| Service | `rg6_control/open_gripper` | `std_srvs/srv/Trigger` |
-| Service | `rg6_control/close_gripper` | `std_srvs/srv/Trigger` |
+| Service | `rg6_control/open` | `std_srvs/srv/Trigger` |
+| Service | `rg6_control/close` | `std_srvs/srv/Trigger` |
 | Client | `io_and_status_controller/set_io` | `ur_msgs/srv/SetIO` |
 | Subscriber | `io_and_status_controller/tool_data` | `ur_msgs/msg/ToolDataMsg` |
 

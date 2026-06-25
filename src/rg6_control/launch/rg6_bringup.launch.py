@@ -2,7 +2,7 @@
 """Bringup fuer den OnRobot RG6 auf dem Clearpath-UR5.
 
 Startet:
-  1. den rg6_control-Node (open_gripper/close_gripper) im manipulators-Namespace,
+  1. den rg6_control-Node (open/close) im manipulators-Namespace,
   2. den rg6_joint_state_broadcaster -> mappt tool_data.analog_input2 auf das
      Gelenk 'rg6-l_out_joint' und publiziert es als joint_states -> Greifer
      animiert im RViz/Foxglove (rg6_*-Gelenke sind revolute+mimic).

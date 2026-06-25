@@ -31,11 +31,11 @@ public:
   RG6ControlNode() : Node("rg6_control_node")
   {
     // Relative Namen -> aufloesbar im jeweiligen Namespace (z.B. /a200_0553/manipulators)
-    open_gripper_service_ = this->create_service<std_srvs::srv::Trigger>(
-      "rg6_control/open_gripper",
+    open_service_ = this->create_service<std_srvs::srv::Trigger>(
+      "rg6_control/open",
       std::bind(&RG6ControlNode::open_callback, this, std::placeholders::_1, std::placeholders::_2));
-    close_gripper_service_ = this->create_service<std_srvs::srv::Trigger>(
-      "rg6_control/close_gripper",
+    close_service_ = this->create_service<std_srvs::srv::Trigger>(
+      "rg6_control/close",
       std::bind(&RG6ControlNode::close_callback, this, std::placeholders::_1, std::placeholders::_2));
     io_client_ = this->create_client<ur_msgs::srv::SetIO>("io_and_status_controller/set_io");
 
@@ -182,7 +182,7 @@ private:
     RCLCPP_INFO(this->get_logger(), "RG6: %s", response->message.c_str());
   }
 
-  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_gripper_service_, close_gripper_service_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_service_, close_service_;
   rclcpp::Client<ur_msgs::srv::SetIO>::SharedPtr io_client_;
   rclcpp::TimerBase::SharedPtr voltage_timer_;
 };

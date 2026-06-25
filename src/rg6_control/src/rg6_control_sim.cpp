@@ -15,8 +15,8 @@ class RG6ControlNode : public rclcpp::Node{
   public:
     RG6ControlNode() : Node("rg6_control_node")
     {
-      open_gripper_service_= this->create_service<std_srvs::srv::Trigger>("rg6_control/open_gripper", std::bind(&RG6ControlNode::open_callback, this, std::placeholders::_1, std::placeholders::_2));
-      close_gripper_service_ = this->create_service<std_srvs::srv::Trigger>("rg6_control/close_gripper", std::bind(&RG6ControlNode::close_callback, this, std::placeholders::_1, std::placeholders::_2));
+      open_service_= this->create_service<std_srvs::srv::Trigger>("rg6_control/open", std::bind(&RG6ControlNode::open_callback, this, std::placeholders::_1, std::placeholders::_2));
+      close_service_ = this->create_service<std_srvs::srv::Trigger>("rg6_control/close", std::bind(&RG6ControlNode::close_callback, this, std::placeholders::_1, std::placeholders::_2));
       io_client_ = this->create_client<ur_msgs::srv::SetIO>("/io_and_status_controller/set_io");
     }
   private:
@@ -95,7 +95,7 @@ class RG6ControlNode : public rclcpp::Node{
       response->message = target_reached ? "Gripper OK" : "Gripper TIMEOUT";
       RCLCPP_INFO(this->get_logger(), "Gripper %s confirmed", target_reached ? "OK" : "TIMEOUT");
     }
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_gripper_service_, close_gripper_service_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_service_, close_service_;
     rclcpp::Client<ur_msgs::srv::SetIO>::SharedPtr io_client_;
     };
 int main(int argc, char* argv[])

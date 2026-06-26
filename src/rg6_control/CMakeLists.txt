@@ -47,7 +47,7 @@ target_link_libraries(rg6_joint_state_broadcaster_sim
 )
 
 
-install(DIRECTORY launch config
+install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 install(TARGETS rg6_joint_state_broadcaster rg6_control rg6_control_sim rg6_joint_state_broadcaster_sim

@@ -156,21 +156,32 @@ The Clearpath UR namespace is `/<serial>/manipulators` (e.g.
 1. **Make this workspace visible to the robot.** Add its `install/setup.bash`
    to `system.ros2.workspaces` in `robot.yaml` (also needed so `package://rg6_description/...`
    meshes resolve, e.g. in Foxglove).
-2. **`io_and_status_controller` is not spawned by Clearpath** (only
-   `joint_state_broadcaster` + the arm trajectory controller). Spawn it
-   yourself, e.g.:
-   ```bash
-   ros2 run controller_manager spawner io_and_status_controller \
-     -c /a200_0553/manipulators/controller_manager \
-     --controller-type ur_controllers/GPIOController \
-     --param-file <your>/io_and_status_controller.yaml   # tf_prefix: arm_0_
+2. **`io_and_status_controller` is not spawned by Clearpath by default** (only
+   `joint_state_broadcaster` + the arm trajectory controller). Make Clearpath
+   spawn it itself by defining it in `robot.yaml` under the arm's `ros_parameters`
+   (clearpath_common PR #347) — the top-level `io_and_status_controller` key has
+   `controller` in its name, so Clearpath's spawn loop activates it:
+   ```yaml
+   manipulators:
+     arms:
+       - model: universal_robots
+         # ...
+         ros_parameters:
+           controller_manager:
+             io_and_status_controller:
+               type: ur_controllers/GPIOController
+           io_and_status_controller:
+             tf_prefix: arm_0_
    ```
+   `rg6_control` waits (polls `io_and_status_controller/set_io` up to ~60 s) for it
+   on startup before setting the 24 V tool voltage.
 3. **Run this driver in the manipulators namespace:**
    ```bash
    ros2 run rg6_control rg6_control --ros-args -r __ns:=/a200_0553/manipulators
    ```
-   For autostart, wrap it (plus the spawner) in a launch file and reference it
-   from `platform.extras.launch` in `robot.yaml`.
+   For autostart, wrap it in `rg6_bringup.launch.py` and start it from a service /
+   `platform.extras.launch` (the io_and_status_controller comes from robot.yaml,
+   so no spawner is needed here anymore).
 
 For the **visual model** on a Clearpath robot, do **not** include
 `rg6_gripper.xacro` directly — its links use the generic name `base_link`, which

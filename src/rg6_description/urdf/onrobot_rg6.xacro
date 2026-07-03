@@ -16,17 +16,28 @@
           <color rgba="0.8 0.8 0.8 1" />
         </material>
       </visual>
-      <!-- EINE grobe Huell-Box fuer den GANZEN Greifer (Basis+Finger), statt
-           filigraner Einzel-Meshes. Ein einziger Kollisionskoerper -> keine
-           Selbstkollision (war die MoveIt-Planungsblockade), aber Greifer wird
-           gegen Arm/Umgebung geprueft. Box liegt +z (vor dem Flansch), reicht
-           NICHT in arm_0_wrist_3_link zurueck -> kein Handgelenk-Falschtreffer.
-           Masse aus Greifer-Huellmass (offen): x +-0.05, y +-0.09, z 0.02..0.27.
-           Bei Bedarf in RViz (Collision Enabled) nachziehen. -->
+      <!-- ZWEI enge Huell-Boxen fuer den GANZEN Greifer, beide in DIESEM Link:
+           weiterhin keine Selbstkollision innerhalb des Greifers (mehrere
+           <collision>-Elemente eines Links bilden fuer MoveIt EINEN Koerper),
+           aber deutlich engere Umgebungs-/Armpruefung als die alte Einzelbox
+           0.11x0.19x0.25 (die blockierte z.B. Posen mit dem Greifer ueber dem
+           Husky-Topplate als Scheinkollision, s. hrl-Scan-Pose).
+           Masse aus den Visual-Meshes vermessen (twinlink/MuJoCo, voller
+           Fingerhub t=0..0.6), Marge ~5 mm:
+             Gehaeuse:  x[-0.036,+0.040] y[+-0.042] z[0..0.167]
+             Finger:    x[+-0.013]       y[+-0.078] z[0.121..0.283] (Hub-Union)
+           Gehaeuse-Box startet bei z=0.02 -> reicht NICHT in arm_0_wrist_3_link
+           zurueck (kein Handgelenk-Falschtreffer). -->
       <collision>
-        <origin xyz="0 0 0.145" rpy="0 0 0"/>
+        <origin xyz="0.002 0 0.095" rpy="0 0 0"/>
         <geometry>
-          <box size="0.11 0.19 0.25"/>
+          <box size="0.086 0.094 0.150"/>
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.205" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.036 0.166 0.170"/>
         </geometry>
       </collision>
     </link>

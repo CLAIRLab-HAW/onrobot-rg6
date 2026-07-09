@@ -24,6 +24,7 @@
 // (z. B. /a200_0553/manipulators).
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -41,6 +42,7 @@
 #include "control_msgs/action/gripper_command.hpp"
 #include "rg6_msgs/msg/gripper_state.hpp"
 #include "rg6_msgs/srv/grip.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -112,6 +114,23 @@ public:
             di_ready_ = di.state;
             have_io_states_ = true;
           }
+        }
+      });
+
+    // ExternalControl-Status: erst wenn das ROS-Programm auf dem UR laeuft, erreicht
+    // set_io ueberhaupt die Tool-Hardware. Auf die STEIGENDE Flanke (Programm wird
+    // aktiv - beim Boot oder wenn der Arm SPAETER eingeschaltet wird) hin bestromen
+    // wir das Tool und "primen" den Greifer einmal, damit AI2 gueltig wird (siehe
+    // on_external_control_ready). So braucht das spaete Einschalten keinen manuellen
+    // set_tool_power/open-Schritt mehr.
+    program_running_sub_ = create_subscription<std_msgs::msg::Bool>(
+      "io_and_status_controller/robot_program_running", rclcpp::QoS(1),
+      [this](const std_msgs::msg::Bool::ConstSharedPtr & msg) {
+        const bool running = msg->data;
+        const bool rising = running && program_running_state_ != 1;
+        program_running_state_ = running ? 1 : 0;
+        if (rising) {
+          on_external_control_ready();
         }
       });
 
@@ -213,6 +232,13 @@ private:
     declare_parameter<int>("tool_di_ready_pin", 17);          // Tool-DI1
     declare_parameter<int>("tool_voltage", 24);
     declare_parameter<int>("startup_voltage_attempts", 30);   // 30 * 2 s = 60 s
+    // Prime beim Aktivwerden von ExternalControl: Tool bestromen und den Greifer
+    // einmal oeffnen, damit AI2 gueltige Weiten liefert (sonst 0 V bis zum ersten
+    // Kommando -> falscher Ist-Zustand + MoveIt-Startzustand vergiftet). Deckt auch
+    // spaetes Einschalten des Arms ab (Programm-Flanke statt nur Startup-Timer).
+    // prime_on_ready=false schaltet nur das Auto-Oeffnen ab (Bestromen bleibt).
+    declare_parameter<bool>("prime_on_ready", true);
+    declare_parameter<double>("prime_settle_s", 1.0);  // Wartezeit Tool-Power -> prime
 
     // Analog-Kalibrierung Tool-AI2 -> Weite (live nachjustierbar):
     //   ros2 topic echo .../io_and_status_controller/tool_data
@@ -521,11 +547,67 @@ private:
       tool_power_on_ = request->data;
       if (!request->data) {
         have_tool_data_ = false;  // Analogwerte sind ohne Spannung bedeutungslos
+        primed_once_ = false;     // nach echtem Power-Off beim naechsten Hochlauf neu primen
       }
     }
     response->success = true;
     response->message = request->data ? "Tool-Spannung 24V an" : "Tool-Spannung aus (0V)";
     RCLCPP_INFO(get_logger(), "RG6: %s", response->message.c_str());
+  }
+
+  // ExternalControl ist (wieder) aktiv (steigende Flanke von robot_program_running)
+  // -> Tool bestromen und den Greifer einmal primen, damit AI2 gueltige Weiten
+  // liefert. Deckt normalen Boot UND spaetes Einschalten des Arms ab -> kein
+  // manueller set_tool_power/open-Schritt noetig. Laeuft im eigenen Thread
+  // (blockiert auf set_io + Bewegung); prime_in_progress_ verhindert Doppelstart.
+  void on_external_control_ready()
+  {
+    // WICHTIG: nur beim ERSTEN Hochlaufen nach dem Einschalten bestromen+primen.
+    // Spaetere Flanken sind i.d.R. der ExternalControl-Neustart NACH einer URScript-
+    // Grip-Injektion (do_urscript_grip -> resend_robot_program). Da darf NICHT erneut
+    // geoeffnet werden - das liesse ein gegriffenes Objekt fallen. Nach einem echten
+    // Tool-Power-Off (handle_set_tool_power) wird primed_once_ zurueckgesetzt.
+    {
+      std::lock_guard<std::mutex> lk(state_mutex_);
+      if (primed_once_ && tool_power_on_) {
+        return;  // schon versorgt & geprimt (z.B. Grip-Resend) -> nichts tun
+      }
+    }
+    bool expected = false;
+    if (!prime_in_progress_.compare_exchange_strong(expected, true)) {
+      return;  // laeuft bereits
+    }
+    std::thread{[this]() {
+      RCLCPP_INFO(get_logger(),
+        "RG6: ExternalControl aktiv -> Tool bestromen + Greifer primen (AI2 gueltig machen).");
+      const auto volts = get_parameter("tool_voltage").as_int();
+      if (send_set_io(ur_msgs::srv::SetIO::Request::FUN_SET_TOOL_VOLTAGE, 0,
+          static_cast<float>(volts)))
+      {
+        std::lock_guard<std::mutex> lk(state_mutex_);
+        tool_power_on_ = volts > 0;
+      } else {
+        RCLCPP_WARN(get_logger(),
+          "RG6: Tool-Bestromung fehlgeschlagen (set_io nicht verfuegbar).");
+      }
+      bool do_prime = get_parameter("prime_on_ready").as_bool();
+      {
+        std::lock_guard<std::mutex> lk(state_mutex_);
+        if (primed_once_) do_prime = false;  // seit dem Einschalten schon geprimt
+      }
+      if (do_prime) {
+        // kurz warten, bis die Tool-Spannung anliegt, dann einmal oeffnen. Das
+        // erste Kommando bringt den RG6 dazu, AI2 auf echte Werte zu treiben.
+        std::this_thread::sleep_for(std::chrono::duration<double>(
+            std::max(0.0, get_parameter("prime_settle_s").as_double())));
+        auto resp = std::make_shared<std_srvs::srv::Trigger::Response>();
+        handle_open_close(/*close_cmd=*/false, resp);  // greift motion_mutex_ selbst
+        RCLCPP_INFO(get_logger(), "RG6: Prime-Open: %s", resp->message.c_str());
+        std::lock_guard<std::mutex> lk(state_mutex_);
+        primed_once_ = true;
+      }
+      prime_in_progress_ = false;
+    }}.detach();
   }
 
   // ======================== Ziel-Weite/-Kraft (URScript) ===================
@@ -910,6 +992,7 @@ private:
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr resend_client_;
   rclcpp::Subscription<ur_msgs::msg::ToolDataMsg>::SharedPtr tool_data_sub_;
   rclcpp::Subscription<ur_msgs::msg::IOStates>::SharedPtr io_states_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr program_running_sub_;
   rclcpp::Publisher<rg6_msgs::msg::GripperState>::SharedPtr state_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr urscript_pub_;
   rclcpp::TimerBase::SharedPtr voltage_timer_, state_timer_;
@@ -924,6 +1007,10 @@ private:
   bool tool_power_on_{false};
   bool high_force_preset_{false};
   uint8_t last_command_{rg6_msgs::msg::GripperState::COMMAND_NONE};
+
+  int program_running_state_{-1};        // -1 unbekannt, 0 aus, 1 ExternalControl laeuft
+  std::atomic<bool> prime_in_progress_{false};
+  bool primed_once_{false};              // seit letztem Power-On schon bestromt+geprimt?
 
   std::mutex motion_mutex_;  // eine Greiferbewegung zur Zeit
 };

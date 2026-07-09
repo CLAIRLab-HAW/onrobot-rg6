@@ -35,6 +35,10 @@ public:
     this->declare_parameter<double>("in_open", 10.0);
     this->declare_parameter<double>("angle_closed", 0.6);
     this->declare_parameter<double>("angle_open", 0.0);
+    // Totzonen-Schwelle: AI2 UNTER diesem Wert gilt als "kein gueltiges Feedback"
+    // (der RG6 treibt die Analogleitung erst nach dem ersten Kommando; davor ~0 V).
+    // Muss unter dem Zu-Wert in_closed liegen (0.56 V) und ueber der 0-V-Totlage.
+    this->declare_parameter<double>("dead_input_threshold", 0.2);
 
     // Start = offen, damit das Modell sofort (auch ohne tool_data) zusammengebaut ist.
     position_ = this->get_parameter("angle_open").as_double();
@@ -61,6 +65,32 @@ private:
     const double angle_open   = this->get_parameter("angle_open").as_double();
 
     const double analog_input = msg->analog_input2;
+
+    // Plausibilitaets-Gate: der RG6 treibt AI2 erst, NACHDEM er nach dem Einschalten
+    // sein erstes Bewegungskommando bekommen hat - davor liegt AI2 bei ~0 V (unter
+    // dem Zu-Wert in_closed=0.56). Diese 0 V sind KEINE Weite: linear abgebildet
+    // landen sie durch die Klemmung auf 'closed' -> falscher Ist-Zustand UND, weil
+    // move_group von hier seinen Startzustand liest, ein vergifteter MoveIt-Start
+    // (Planung vom Scheinwert -> Greifer laesst sich in MoveIt nicht bewegen).
+    // Darum unter der Totzone den letzten guten Wert HALTEN statt zu mappen.
+    const double dead = this->get_parameter("dead_input_threshold").as_double();
+    if (analog_input < dead) {
+      if (have_valid_) {
+        have_valid_ = false;  // hatten Feedback -> Tool jetzt vermutlich stromlos
+        RCLCPP_WARN(this->get_logger(),
+          "RG6-JSB: analog_input2=%.3f < %.3f V -> kein gueltiges Weiten-Feedback "
+          "(Tool stromlos / vor erstem Kommando). Halte letzten Wert.",
+          analog_input, dead);
+      }
+      return;  // position_ unveraendert (Startwert = angle_open)
+    }
+    if (!have_valid_) {
+      have_valid_ = true;
+      RCLCPP_INFO(this->get_logger(),
+        "RG6-JSB: gueltiges Weiten-Feedback (analog_input2=%.3f V) -> tracke Ist-Weite.",
+        analog_input);
+    }
+
     double pos = angle_closed;
     const double span_in = in_open - in_closed;
     if (std::abs(span_in) > 1e-9) {
@@ -100,6 +130,7 @@ private:
   }
 
   double position_{0.0};
+  bool have_valid_{false};  // schon mind. ein plausibles AI2-Feedback gesehen?
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr pub_;
   rclcpp::Subscription<ur_msgs::msg::ToolDataMsg>::SharedPtr sub_;
   rclcpp::TimerBase::SharedPtr timer_;

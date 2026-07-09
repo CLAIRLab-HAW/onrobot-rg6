@@ -15,6 +15,15 @@
     tool_voltage: 24
     startup_voltage_attempts: 30
 
+    # --- Auto-Prime beim Aktivwerden von ExternalControl ---
+    # Sobald robot_program_running steigt (Boot ODER spaetes Einschalten des Arms),
+    # bestromt rg6_control das Tool und oeffnet den Greifer einmal, damit AI2 gueltige
+    # Weiten liefert (sonst 0 V bis zum ersten Kommando -> falscher Ist-Zustand +
+    # vergifteter MoveIt-Startzustand). prime_on_ready=false laesst nur das Auto-Oeffnen
+    # weg (Bestromung bleibt).
+    prime_on_ready: true
+    prime_settle_s: 1.0          # [s] Wartezeit Tool-Power -> Prime-Open
+
     # --- Analog-Kalibrierung Tool-AI2 -> Greifweite ---
     width_in_open: 10.0          # [V] AI2 bei ganz offen   (TODO: am Geraet ablesen)
     width_in_closed: 0.56        # [V] AI2 bei ganz zu

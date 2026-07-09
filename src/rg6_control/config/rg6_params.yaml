@@ -1,0 +1,63 @@
+# Parameter fuer rg6_control (Realtreiber). Wildcard-Namespace -> gilt in jedem
+# Launch-Namespace (a200-0553: /a200_0553/manipulators).
+#
+# KALIBRIERUNG: width_in_open/closed gegen live tool_data ermitteln
+#   ros2 topic echo /a200_0553/manipulators/io_and_status_controller/tool_data
+# (analog_input2 bei ganz offen / ganz zu ablesen). angle_open/closed muessen zu
+# rg6_joint_state_broadcaster passen (0 = offen, + = zu).
+/**/rg6_control_node:
+  ros__parameters:
+    # --- UR-Tool-I/O-Belegung (ur_msgs-Pinnummern) ---
+    io_grip_pin: 16              # Tool-DO0: 0=oeffnen, 1=schliessen (Preset-Weite)
+    io_force_preset_pin: 17      # Tool-DO1: Kraft-Preset low/high
+    tool_di_grip_detected_pin: 16  # Tool-DI0: Objekt gegriffen
+    tool_di_ready_pin: 17          # Tool-DI1: high=Ruhe, low=Bewegung
+    tool_voltage: 24
+    startup_voltage_attempts: 30
+
+    # --- Analog-Kalibrierung Tool-AI2 -> Greifweite ---
+    width_in_open: 10.0          # [V] AI2 bei ganz offen   (TODO: am Geraet ablesen)
+    width_in_closed: 0.56        # [V] AI2 bei ganz zu
+    width_open_m: 0.160          # [m] RG6-Hub
+    width_closed_m: 0.0
+
+    # --- Gelenkwinkel-Konvention (rg6_finger_joint) ---
+    angle_open: 0.0
+    angle_closed: 0.6
+
+    # --- Bewegungs-/Settle-Erkennung (Fallback ohne io_states) ---
+    force_threshold: 3.1         # [V] AI3
+    move_eps: 0.10               # [V] AI2
+    settle_eps: 0.05             # [V] AI2
+    settle_time_s: 0.4
+    motion_timeout_s: 10.0
+    no_motion_grace_s: 2.0   # keine Bewegung angelaufen -> "bereits im Zielzustand"
+
+    state_rate: 20.0
+
+    # --- Ziel-Weite/-Kraft (Service 'grip' + Action-Zwischenweiten) ---
+    # 'urscript' = 17-Bit-Protokoll per URScript-Injektion (voller Umfang;
+    #              unterbricht ExternalControl, resend_robot_program folgt)
+    # 'io'       = nur Level-Kommandos (grip-Service wird abgelehnt)
+    grip_backend: urscript
+    urscript_topic: urscript_interface/script_command
+    resend_program_after_grip: true
+    resend_program_delay_s: 0.5
+
+    # 17-Bit-Kodierung (RG2-belegt: steps=111, divisor=2; RG6-Defaults nach
+    # Datenblatt-Bereichen -> VOR Produktivnutzung am Geraet verifizieren,
+    # s. README "Kalibrierung")
+    grip_max_width_mm: 160.0
+    grip_min_force_n: 25.0
+    grip_max_force_n: 120.0
+    grip_default_force_n: 60.0
+    rg_width_steps: 161
+    rg_force_divisor: 2
+    rg_slave: false
+    rg_slave_flag: 16384
+    rg_ready_timeout_sync: 400   # sync-Zyklen (8 ms @125 Hz)
+    rg_busy_start_timeout_sync: 20
+
+    # --- GripperCommand-Action ---
+    action_endpoint_angle_tol: 0.05  # [rad] Ziel ~ Endlage -> Level-Kommando
+    action_goal_angle_tol: 0.08      # [rad] reached_goal-Toleranz

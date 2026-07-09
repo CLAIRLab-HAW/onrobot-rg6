@@ -1,0 +1,14 @@
+# Greifen mit expliziter Zielweite/-kraft.
+#
+# Erfordert grip_backend=urscript (URScript-Injektion ueber urscript_interface):
+# Der RG6 bekommt Weite+Kraft ueber das 17-Bit-Protokoll auf Tool-DO0/DO1
+# einprogrammiert. ACHTUNG: Die Injektion unterbricht das ExternalControl-
+# Programm; rg6_control ruft danach automatisch resend_robot_program.
+float64 width    # [m] Zielweite 0 .. 0.160 (RG6-Hub)
+float64 force    # [N] Zielkraft 25 .. 120; 0 = Parameter-Default (grip_default_force)
+bool wait        # true: Antwort erst nach Bewegungsende (settle/Timeout)
+---
+bool success
+bool grip_detected   # Objekt gegriffen (Tool-DI0 bzw. Settle-Heuristik)
+float64 final_width  # [m] gemessene Endweite (NaN, wenn wait=false)
+string message

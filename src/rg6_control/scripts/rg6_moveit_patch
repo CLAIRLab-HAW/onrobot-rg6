@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""rg6_moveit_patch: macht den OnRobot RG6 in der Clearpath-MoveIt-Config nutzbar.
+
+Der Clearpath-Generator kennt keinen OnRobot-Greifer (robot.yaml hat dafuer
+keinen Hebel), erzeugt aber bei jedem Boot robot.srdf + moveit.yaml neu. Dieses
+Tool patcht deshalb NACH der Generierung (idempotent, .bak, atomar - Stil
+clearpath-custom-setup.py):
+
+  1. <setup>/robot.srdf                       (das von moveit.launch.py geladene,
+     vom moveit_collision_updater erzeugte SRDF; die RG6-Kollisionspaare stehen
+     dort schon, weil der Updater das volle URDF inkl. platform.extras sieht):
+       + Planungsgruppe 'gripper' (Treibergelenk rg6_finger_joint)
+       + passive_joint fuer die 5 Folgegelenke (kein <mimic> im URDF - Foxglove)
+       + group_states 'open'/'close'
+       + end_effector 'rg6' an arm_0_tool0 (parent_group arm_0)
+  2. <setup>/manipulators/config/moveit.yaml:
+       + moveit_simple_controller_manager: GripperCommand-Controller
+         'manipulators/rg6_gripper_controller' (action_ns gripper_cmd) ->
+         bedient von rg6_control (rg6_gripper_controller/gripper_cmd)
+       + robot_description_planning.joint_limits.rg6_finger_joint
+         (Beschleunigungslimit fuer TOTG-Zeitparametrierung)
+
+Aufrufe:
+  Roboter:  aus clearpath-custom-setup.py (per Boot, vor clearpath-manipulators)
+  Offboard: husky-offboard entrypoint.sh nach den generate_*-Laeufen
+  Manuell:  rg6_moveit_patch --setup-path /etc/clearpath
+
+Selbst-enthaltend: braucht nur python3 + PyYAML (kein ROS-Environment).
+"""
+
+import argparse
+import os
+import re
+import shutil
+import sys
+import tempfile
+import xml.etree.ElementTree as ET
+
+TAG = "rg6_moveit_patch"
+
+MARKER_BEGIN = "<!-- onrobot-rg6:BEGIN (rg6_moveit_patch; nicht von Hand editieren) -->"
+MARKER_END = "<!-- onrobot-rg6:END -->"
+
+# Muss zu rg6_control/rg6_joint_state_broadcaster passen (0 = offen, + = zu)
+# und zu den Gelenknamen aus rg6_description (Praefix 'rg6_').
+SRDF_FRAGMENT_TEMPLATE = """\
+    <group name="{gripper_group}">
+        <joint name="{prefix}finger_joint"/>
+    </group>
+    <passive_joint name="{prefix}left_inner_knuckle_joint"/>
+    <passive_joint name="{prefix}left_inner_finger_joint"/>
+    <passive_joint name="{prefix}right_outer_knuckle_joint"/>
+    <passive_joint name="{prefix}right_inner_knuckle_joint"/>
+    <passive_joint name="{prefix}right_inner_finger_joint"/>
+    <group_state name="open" group="{gripper_group}">
+        <joint name="{prefix}finger_joint" value="{angle_open}"/>
+    </group_state>
+    <group_state name="close" group="{gripper_group}">
+        <joint name="{prefix}finger_joint" value="{angle_closed}"/>
+    </group_state>
+    <end_effector name="rg6" parent_link="{tool_frame}" group="{gripper_group}"/>"""
+# Hinweis: bewusst KEIN parent_group="arm_0" am end_effector - Clearpaths
+# arm_0-Gruppe ist joint-basiert und enthaelt arm_0_tool0 nicht als Link ->
+# move_group wuerde "does not include the parent link" loggen und es ignorieren.
+
+
+def log(msg, err=False):
+    print(f"{TAG}: {msg}", file=(sys.stderr if err else sys.stdout), flush=True)
+
+
+def atomic_write(path, content):
+    backup = path + ".bak"
+    if not os.path.exists(backup):
+        shutil.copy2(path, backup)
+        log(f"Backup erstellt: {backup}")
+    dir_name = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+# --------------------------- SRDF ------------------------------------------
+def patch_srdf(path, args):
+    """Fuegt den RG6-Block (Marker-gerahmt) vor </robot> ein bzw. erneuert ihn."""
+    if not os.path.isfile(path):
+        log(f"WARN: SRDF nicht gefunden, uebersprungen: {path} "
+            "(generate_semantic_description gelaufen?)", err=True)
+        return False
+
+    with open(path) as f:
+        content = f.read()
+
+    fragment = SRDF_FRAGMENT_TEMPLATE.format(
+        gripper_group=args.gripper_group,
+        prefix=args.prefix,
+        angle_open=args.angle_open,
+        angle_closed=args.angle_closed,
+        tool_frame=args.tool_frame,
+    )
+    block = f"    {MARKER_BEGIN}\n{fragment}\n    {MARKER_END}\n"
+
+    if MARKER_BEGIN in content:
+        # vorhandenen Block ersetzen (Update-Faehigkeit)
+        rx = re.compile(
+            r"[ \t]*" + re.escape(MARKER_BEGIN) + r".*?" + re.escape(MARKER_END) + r"\n?",
+            re.DOTALL)
+        new_content = rx.sub(block, content)
+        if new_content == content:
+            log(f"SRDF: RG6-Block bereits aktuell ({path}).")
+            return False
+        action = "aktualisiert"
+    else:
+        idx = content.rfind("</robot>")
+        if idx < 0:
+            log(f"WARN: SRDF ohne </robot>?! uebersprungen: {path}", err=True)
+            return False
+        new_content = content[:idx] + block + content[idx:]
+        action = "eingefuegt"
+
+    # Wohlgeformtheit sicherstellen, bevor irgendetwas geschrieben wird.
+    try:
+        root = ET.fromstring(new_content)
+    except ET.ParseError as e:
+        log(f"FEHLER: gepatchtes SRDF nicht wohlgeformt ({e}) - keine Aenderung.", err=True)
+        return False
+    # Duplikate vermeiden: Gruppe darf nur aus unserem Block stammen.
+    groups = [g.get("name") for g in root.findall("group")]
+    if groups.count(args.gripper_group) > 1:
+        log(f"FEHLER: Gruppe '{args.gripper_group}' mehrfach im SRDF - keine Aenderung.",
+            err=True)
+        return False
+
+    atomic_write(path, new_content)
+    log(f"SRDF: RG6-Gruppe/EE {action} ({path}).")
+    return True
+
+
+# --------------------------- moveit.yaml ------------------------------------
+def patch_moveit_yaml(path, args):
+    """GripperCommand-Controller + joint_limits ins generierte moveit.yaml."""
+    try:
+        import yaml
+    except ImportError:
+        log("FEHLER: PyYAML fehlt (apt: python3-yaml) - moveit.yaml nicht gepatcht.",
+            err=True)
+        return False
+
+    if not os.path.isfile(path):
+        log(f"WARN: moveit.yaml nicht gefunden, uebersprungen: {path}", err=True)
+        return False
+
+    with open(path) as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        log(f"WARN: {path} hat unerwartetes Format, uebersprungen.", err=True)
+        return False
+
+    # Top-Level = Namespace-Key (z. B. 'a200_0553') -> move_group.ros__parameters
+    params = None
+    for ns_key, ns_val in data.items():
+        if isinstance(ns_val, dict) and "move_group" in ns_val:
+            params = ns_val["move_group"].get("ros__parameters")
+            break
+    if params is None:
+        log("WARN: kein move_group.ros__parameters in moveit.yaml, uebersprungen.",
+            err=True)
+        return False
+
+    changed = False
+
+    mscm = params.setdefault("moveit_simple_controller_manager", {})
+    names = mscm.setdefault("controller_names", [])
+    if args.controller_name not in names:
+        names.append(args.controller_name)
+        changed = True
+    controller_block = {
+        "action_ns": args.action_ns,
+        "default": True,
+        "joints": [f"{args.prefix}finger_joint"],
+        "type": "GripperCommand",
+        # max_effort der GripperCommand-Goals von move_group [N]; 0 wuerde
+        # rg6_control auf grip_default_force_n zurueckfallen lassen.
+        "max_effort": args.max_effort,
+    }
+    if mscm.get(args.controller_name) != controller_block:
+        mscm[args.controller_name] = controller_block
+        changed = True
+
+    # TOTG (AddTimeOptimalParameterization) braucht Beschleunigungslimits, sonst
+    # schlaegt die Zeitparametrierung fuer die Gripper-Gruppe fehl.
+    limits = params.setdefault("robot_description_planning", {}).setdefault(
+        "joint_limits", {})
+    joint_limits_block = {
+        "has_velocity_limits": True,
+        "max_velocity": args.max_velocity,
+        "has_acceleration_limits": True,
+        "max_acceleration": args.max_acceleration,
+    }
+    if limits.get(f"{args.prefix}finger_joint") != joint_limits_block:
+        limits[f"{args.prefix}finger_joint"] = joint_limits_block
+        changed = True
+
+    if not changed:
+        log(f"moveit.yaml: bereits korrekt ({path}).")
+        return False
+
+    atomic_write(path, yaml.safe_dump(data, sort_keys=False, default_flow_style=False))
+    log(f"moveit.yaml: GripperCommand-Controller '{args.controller_name}' + "
+        f"joint_limits gesetzt ({path}).")
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--setup-path", default="/etc/clearpath",
+                        help="Clearpath-Setup-Verzeichnis (default: /etc/clearpath)")
+    parser.add_argument("--prefix", default="rg6_",
+                        help="Gelenk-/Linkpraefix des Greifermodells (default: rg6_)")
+    parser.add_argument("--gripper-group", default="gripper",
+                        help="Name der MoveIt-Greifergruppe (default: gripper)")
+    parser.add_argument("--tool-frame", default="arm_0_tool0",
+                        help="Elternframe des Endeffektors (default: arm_0_tool0)")
+    parser.add_argument("--angle-open", default="0.0",
+                        help="rg6_finger_joint-Winkel 'open' (default: 0.0)")
+    parser.add_argument("--angle-closed", default="0.6",
+                        help="rg6_finger_joint-Winkel 'close' (default: 0.6)")
+    parser.add_argument("--controller-name",
+                        default="manipulators/rg6_gripper_controller",
+                        help="MoveIt-Controllername (relativ zum move_group-Namespace)")
+    parser.add_argument("--action-ns", default="gripper_cmd",
+                        help="Action-Namespace des Controllers (default: gripper_cmd)")
+    parser.add_argument("--max-effort", type=float, default=60.0,
+                        help="max_effort der MoveIt-GripperCommand-Goals [N] (default: 60)")
+    parser.add_argument("--max-velocity", type=float, default=2.0,
+                        help="joint_limits max_velocity [rad/s] (default: 2.0)")
+    parser.add_argument("--max-acceleration", type=float, default=4.0,
+                        help="joint_limits max_acceleration [rad/s^2] (default: 4.0)")
+    args = parser.parse_args()
+
+    setup = args.setup_path.rstrip("/")
+    log(f"Start (setup: {setup}).")
+    patch_srdf(os.path.join(setup, "robot.srdf"), args)
+    patch_moveit_yaml(os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
+    log("Fertig.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

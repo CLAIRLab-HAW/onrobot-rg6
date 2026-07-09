@@ -1,8 +1,21 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-  <!-- transmission/mimic bewusst entfernt: der rg6_joint_state_broadcaster treibt
-       alle 6 Gelenke explizit. Manche URDF-Parser (z.B. Foxglove) stolpern ueber
-       <mimic>/<transmission>/leere Material-Namen -> Meshes landen im Ursprung. -->
+  <!-- <mimic> ist WIEDER DRIN (offizielle OnRobot-Multiplier, identisch zu den
+       Werten, die der rg6_joint_state_broadcaster explizit publiziert). Ohne
+       <mimic> animiert MoveIt im Planungs-Preview nur das Treibergelenk
+       rg6_finger_joint - die 5 Folgegelenke stehen naemlich im SRDF nur als
+       <passive_joint> (nicht in der gripper-Gruppe) und werden so nicht Teil
+       der Planungs-Trajektorie. Mit <mimic> (URDF) + Aufnahme in die Gruppe
+       (rg6_moveit_patch) klassifiziert MoveIt sie als mimic_joints_ und treibt
+       sie aus rg6_finger_joint ab -> saubere Vorschau von Oeffnen/Schliessen.
+       ROS2 robot_state_publisher (jazzy) wertet <mimic> ebenfalls aus, Foxglove
+       laeuft ohnehin ueber /tf vom RSP.
+       Historie: frueher hies es, <mimic> wuerde bei Foxglove "Meshes am Ursprung"
+       ausloesen. Verursacher war aber das Original-URDF mit <material name="">
+       (LEERER Materialname) - nicht <mimic>. Die leeren Namen sind laengst durch
+       rg6_silver/rg6_black ersetzt, daher ist <mimic> sicher.
+       <transmission> bleibt weg (ros2_control holt sich keine RG6-Transmision;
+       der Greifer haengt am UR-Tool-Interface, nicht am ros2_controller). -->
 
   <xacro:macro name="outer_knuckle" params="prefix fingerprefix">
     <link name="${prefix}${fingerprefix}_outer_knuckle">
@@ -72,6 +85,7 @@
       <child link="${prefix}${fingerprefix}_inner_knuckle" />
       <axis xyz="1 0 0" />
       <limit lower="-0.628319" upper="0.628319" velocity="2.0" effort="1000" />
+      <mimic joint="${prefix}finger_joint" multiplier="-1" offset="0" />
     </joint>
   </xacro:macro>
 
@@ -82,6 +96,7 @@
       <child link="${prefix}${fingerprefix}_inner_finger" />
       <axis xyz="1 0 0" />
       <limit lower="-0.872665" upper="0.872665" velocity="2.0" effort="1000" />
+      <mimic joint="${prefix}finger_joint" multiplier="1" offset="0" />
     </joint>
   </xacro:macro>
 
@@ -105,6 +120,7 @@
       <child link="${prefix}right_outer_knuckle" />
       <axis xyz="1 0 0" />
       <limit lower="-0.628319" upper="0.628319" velocity="2.0" effort="1000" />
+      <mimic joint="${prefix}finger_joint" multiplier="-1" offset="0" />
     </joint>
     <xacro:finger_joints prefix="${prefix}" fingerprefix="right" reflect="-1.0"/>
   </xacro:macro>

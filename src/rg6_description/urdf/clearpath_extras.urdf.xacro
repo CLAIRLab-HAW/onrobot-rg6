@@ -14,9 +14,12 @@
   GREIFERMODELL:
     Sauber artikuliertes RG6 aus package 'rg6_description' (Robotiq-Stil:
     outer_knuckle/inner_knuckle/inner_finger pro Seite). Treibergelenk =
-    'rg6_finger_joint' (Praefix 'rg6_'): 0 = offen, positiv = zu. Der
-    rg6_joint_state_broadcaster setzt ALLE 6 Greifergelenke EXPLIZIT (kein
-    <mimic> - das loesen manche URDF-Parser/Foxglove nicht zuverlaessig auf).
+    'rg6_finger_joint' (Praefix 'rg6_'): 0 = offen, positiv = zu. Die 5
+    Folgegelenke haengen per <mimic> (offizielle OnRobot-Multiplier) am
+    Treibergelenk -> MoveIt animiert sie im Planungs-Preview, der ROS2
+    robot_state_publisher berechnet sie fuer /tf (Foxglove). Der
+    rg6_joint_state_broadcaster publiziert zusaetzlich alle 6 Gelenke explizit
+    (Fallback / Live-Tuning des AI2-Mappings); Werte identisch zu <mimic>.
     Kollision = eine grobe Box am base_link (keine Selbstkollision in MoveIt).
 
   VORAUSSETZUNG: 'rg6_description' muss in einem in robot.yaml unter

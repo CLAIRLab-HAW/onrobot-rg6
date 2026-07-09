@@ -264,6 +264,18 @@ private:
     // Goals auf den aktuellen Zustand (open bei offenem Greifer usw.).
     declare_parameter<double>("no_motion_grace_s", 2.0);
 
+    // Edge-Sicherung fuer Level-Kommandos (Tool-DO0): der RG6 reagiert auf die FLANKE
+    // (Uebergang) auf DO0, NICHT auf einen statischen Level. Steht DO0 schon auf dem
+    // Ziel-Level (z.B. Prime hatte DO0=0, dann nochmal 'open'), gibt es keine Flanke ->
+    // keine Bewegung -> AI2 bleibt ungueltig. Daher kurz den Gegenspiegel setzen, dann
+    // das Ziel (-> Flanke auf Ziel).
+    declare_parameter<double>("edge_toggle_ms", 150.0);   // Dauer des Gegenspiels [ms]
+    // AI2 unter diesem Wert gilt als "kein gueltiges Feedback" (Tool stromlos / vor
+    // erstem Kommando). Pre-Check "bereits im Zielzustand" dann NICHT vertrauen, sondern
+    // Edge erzwingen (bewegt den Greifer, macht AI2 danach gueltig). Muss unter
+    // width_in_closed (0.56 V) liegen.
+    declare_parameter<double>("dead_input_threshold", 0.2);  // [V]
+
     // Zustands-Publisher.
     declare_parameter<double>("state_rate", 20.0);
 
@@ -344,6 +356,21 @@ private:
       return true;  // Kommando ist raus; Bestaetigung kommt physisch via tool_data
     }
     return future.get()->success;
+  }
+
+  // Setzt Tool-DO0 auf `target` mit garantierter FLANKE: kurz den Gegenspiegel, dann
+  // das Ziel. Der RG6 reagiert auf die Flanke (Uebergang) auf DO0, nicht auf einen
+  // statischen Level - steht DO0 schon auf dem Ziel, bewegt sich ohne diesen Toggle
+  // nichts (Edge-Sicherung, s. edge_toggle_ms).
+  bool send_grip_do_edge(int8_t pin, float target)
+  {
+    const float opposite = (target > 0.5f) ? 0.0f : 1.0f;
+    if (!send_set_io(ur_msgs::srv::SetIO::Request::FUN_SET_DIGITAL_OUT, pin, opposite)) {
+      return false;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(
+      static_cast<int>(get_parameter("edge_toggle_ms").as_double())));
+    return send_set_io(ur_msgs::srv::SetIO::Request::FUN_SET_DIGITAL_OUT, pin, target);
   }
 
   struct MotionResult
@@ -473,11 +500,39 @@ private:
       response->message = "RG6: Bewegung laeuft bereits (Kommando abgelehnt)";
       return;
     }
-    RCLCPP_INFO(get_logger(), "RG6: %s (Level-Kommando Tool-DO0)", close_cmd ? "close" : "open");
+    RCLCPP_INFO(get_logger(), "RG6: %s (Level-Kommando Tool-DO0, edge-gesichert)", close_cmd ? "close" : "open");
 
     const auto pin = static_cast<int8_t>(get_parameter("io_grip_pin").as_int());
-    if (!send_set_io(ur_msgs::srv::SetIO::Request::FUN_SET_DIGITAL_OUT, pin,
-        close_cmd ? 1.0f : 0.0f))
+    const float target = close_cmd ? 1.0f : 0.0f;
+
+    // Pre-Check bei gueltigem AI2: Greifer schon im Zielzustand -> kein Kommando noetig
+    // (vermeidet Jitter durch das Edge-Toggle). Bei ungueltigem AI2 (Tool stromlos / vor
+    // erstem Kommando) nicht pruefbar -> unten Edge erzwingen (bewegt den Greifer, macht
+    // AI2 danach gueltig).
+    {
+      std::lock_guard<std::mutex> lk(state_mutex_);
+      const double dead = get_parameter("dead_input_threshold").as_double();
+      if (have_tool_data_ && width_raw_ >= dead) {
+        const double w = width_from_raw(width_raw_);
+        const double w_open = get_parameter("width_open_m").as_double();
+        const double w_closed = get_parameter("width_closed_m").as_double();
+        const double eps = 0.01;  // [m] Schwelle fuer "im Zielzustand"
+        const bool already = close_cmd ? (w <= w_closed + eps) : (w >= w_open - eps);
+        if (already) {
+          last_command_ = close_cmd ? rg6_msgs::msg::GripperState::COMMAND_CLOSE :
+            rg6_msgs::msg::GripperState::COMMAND_OPEN;
+          response->success = true;
+          response->message = "Greifer bereits in Zielzustand (OK, keine Bewegung)";
+          RCLCPP_INFO(get_logger(), "RG6: %s", response->message.c_str());
+          return;
+        }
+      }
+    }
+
+    // Edge sicherstellen: kurz Gegenspiegel, dann Ziel -> Flanke auf Ziel. (Der RG6
+    // reagiert auf die Flanke, nicht auf den statischen Level; steht DO0 schon auf dem
+    // Ziel, bewegt sich ohne diesen Toggle nichts.)
+    if (!send_grip_do_edge(pin, target))
     {
       response->success = false;
       response->message = "UR IO service (io_and_status_controller/set_io) not available";
@@ -891,8 +946,8 @@ private:
           "erreichbar -> naechste Endlage (%s)", target_angle, close_cmd ? "close" : "open");
       }
       const auto pin = static_cast<int8_t>(get_parameter("io_grip_pin").as_int());
-      sent = send_set_io(ur_msgs::srv::SetIO::Request::FUN_SET_DIGITAL_OUT, pin,
-        close_cmd ? 1.0f : 0.0f);
+      // Edge-gesichert (s. handle_open_close): Flanke auf DO0, nicht nur statischer Level.
+      sent = send_grip_do_edge(pin, close_cmd ? 1.0f : 0.0f);
       if (sent) {
         std::lock_guard<std::mutex> lk(state_mutex_);
         last_command_ = close_cmd ? rg6_msgs::msg::GripperState::COMMAND_CLOSE :

@@ -18,6 +18,7 @@ add_executable(rg6_joint_state_broadcaster_sim src/rg6_joint_state_broadcaster_s
 add_executable(rg6_control src/rg6_control.cpp)
 add_executable(rg6_control_sim src/rg6_control_sim.cpp)
 add_executable(joint_state_aggregator src/joint_state_aggregator.cpp)
+add_executable(joint_state_relay src/joint_state_relay.cpp)
 
 # Link libraries
 target_link_libraries(rg6_joint_state_broadcaster PUBLIC
@@ -53,11 +54,17 @@ target_link_libraries(joint_state_aggregator PUBLIC
   sensor_msgs::sensor_msgs_library
 )
 
+target_link_libraries(joint_state_relay PUBLIC
+  ${sensor_msgs_TARGETS}
+  rclcpp::rclcpp
+  sensor_msgs::sensor_msgs_library
+)
+
 
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
-install(TARGETS rg6_joint_state_broadcaster rg6_control rg6_control_sim rg6_joint_state_broadcaster_sim joint_state_aggregator
+install(TARGETS rg6_joint_state_broadcaster rg6_control rg6_control_sim rg6_joint_state_broadcaster_sim joint_state_aggregator joint_state_relay
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -160,10 +160,14 @@ private:
 
   void publish()
   {
-    // ALLE 6 Greifergelenke explizit publizieren. Der robot_state_publisher wertet
-    // die <mimic>-Tags des Modells nicht aus -> wuerde 'rg6_finger_joint' allein nur
-    // left_outer_knuckle setzen, der Rest faellt auf den Ursprung ("Teile liegen
-    // nebeneinander"). Faktoren = die mimic-multiplier aus onrobot_rg6_model_macro:
+    // ALLE 6 Greifergelenke explizit publizieren. Das URDF traegt inzwischen
+    // <mimic>-Tags (offizielle OnRobot-Multiplier) -> der ROS2 robot_state_publisher
+    // (jazzy) leitet die 5 Folgegelenke selbst aus rg6_finger_joint ab und MoveIt
+    // animiert sie im Planungs-Preview. Dieses explizite Publizieren ist daher ein
+    // Fallback (z.B. aeltere RSP/Parser ohne mimic-Support) und dient dem
+    // Live-Tuning des AI2-Mappings; die Werte sind identisch zu den URDF-<mimic>-
+    // Faktoren, damit keine Konflikte entstehen (RSPs map::insert ueberschreibt
+    // vorhandene Werte nicht). Faktoren = mimic-multiplier aus onrobot_rg6_model_macro:
     //   finger_joint (Treiber)        : +1
     //   *_inner_knuckle_joint         : -1
     //   *_inner_finger_joint          : +1

@@ -9,8 +9,11 @@ clearpath-custom-setup.py):
   1. <setup>/robot.srdf                       (das von moveit.launch.py geladene,
      vom moveit_collision_updater erzeugte SRDF; die RG6-Kollisionspaare stehen
      dort schon, weil der Updater das volle URDF inkl. platform.extras sieht):
-       + Planungsgruppe 'gripper' (Treibergelenk rg6_finger_joint)
-       + passive_joint fuer die 5 Folgegelenke (kein <mimic> im URDF - Foxglove)
+       + Planungsgruppe 'gripper' (Treibergelenk rg6_finger_joint) MIT
+         den 5 Folgegelenken als <joint> in der Gruppe. Zusammen mit dem
+         URDF-<mimic> (rg6_description) werden sie als mimic_joints_ aus
+         finger_joint abgeleitet -> saubere Preview von Oeffnen/Schliessen,
+         ohne aktiv geplant zu werden (active DOF bleibt 1).
        + group_states 'open'/'close'
        + end_effector 'rg6' an arm_0_tool0 (parent_group arm_0)
   2. <setup>/manipulators/config/moveit.yaml:
@@ -43,15 +46,26 @@ MARKER_END = "<!-- onrobot-rg6:END -->"
 
 # Muss zu rg6_control/rg6_joint_state_broadcaster passen (0 = offen, + = zu)
 # und zu den Gelenknamen aus rg6_description (Praefix 'rg6_').
+#
+# Die 5 Folgegelenke stehen als <joint> IN der gripper-Gruppe (frueher nur
+# top-level <passive_joint>): MoveIt nimmt in addJointModelGroup NUR explizit
+# gelistete Joints/Links/Chains/Subgroups in die Gruppe auf - es gibt KEIN
+# Auto-Add von mimic-Abhaengigen. Erst als Gruppenmitglied werden sie vom
+# JointModelGroup-Konstruktor anhand des URDF-<mimic> (getMimic()!=nullptr) als
+# mimic_joints_ klassifiziert -> nicht aktiv geplant (active DOF bleibt 1 =
+# {prefix}finger_joint, GripperCommand-Controller unverändert), ABER Teil der
+# Planungs-Trajektorie und per group_mimic_update_ aus finger_joint abgeleitet
+# -> saubere Animation aller 6 Gelenke im MoveIt-Planungs-Preview. Ohne diese
+# Aufnahme animiert MoveIt nur rg6_finger_joint ("nur ein Finger bewegt sich").
 SRDF_FRAGMENT_TEMPLATE = """\
     <group name="{gripper_group}">
         <joint name="{prefix}finger_joint"/>
+        <joint name="{prefix}left_inner_knuckle_joint"/>
+        <joint name="{prefix}left_inner_finger_joint"/>
+        <joint name="{prefix}right_outer_knuckle_joint"/>
+        <joint name="{prefix}right_inner_knuckle_joint"/>
+        <joint name="{prefix}right_inner_finger_joint"/>
     </group>
-    <passive_joint name="{prefix}left_inner_knuckle_joint"/>
-    <passive_joint name="{prefix}left_inner_finger_joint"/>
-    <passive_joint name="{prefix}right_outer_knuckle_joint"/>
-    <passive_joint name="{prefix}right_inner_knuckle_joint"/>
-    <passive_joint name="{prefix}right_inner_finger_joint"/>
     <group_state name="open" group="{gripper_group}">
         <joint name="{prefix}finger_joint" value="{angle_open}"/>
     </group_state>

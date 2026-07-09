@@ -18,11 +18,14 @@ Gedacht zum Einbinden ueber 'platform.extras.launch' in der robot.yaml.
 Voraussetzung: der Workspace mit rg6_control ist in robot.yaml unter
 'system.ros2.workspaces' eingetragen (sonst wird das Package nicht gefunden).
 
-Argument 'js_topic' (default '/a200_0553/platform/joint_states'): Topic, auf dem
-das Greifer-Gelenk publiziert wird. Es MUSS das joint_states-Topic sein, das der
-Greifer-rendernde robot_state_publisher (der /a200_0553/robot_description
-ausliefert) konsumiert. Auf a200-0553 ist das /a200_0553/platform/joint_states
-(dort liegen auch die Arm-Gelenke). Per Argument ueberschreibbar.
+Argument 'js_topic' (default '/a200_0553/manipulators/endeffectors/joint_states'):
+Topic, auf dem die Greifer-Gelenke publiziert werden. Phase-2-Umbau: der Greifer
+advertised jetzt im korrekten manipulators/endeffectors-Namespace statt direkt in
+platform/joint_states. Ein Relay (rg6_control joint_states.launch.py) spiegelt
+dieses Topic auf /a200_0553/platform/joint_states, das Clearpaths
+robot_state_publisher + move_group weiterhin konsumieren -> Live-TF/MoveIt bleiben
+unangetastet. Der joint_state_aggregator fasst zusaetzlich alle Quellen zu
+/a200_0553/joint_states zusammen. Per Argument ueberschreibbar.
 """
 
 from launch import LaunchDescription
@@ -39,11 +42,11 @@ def generate_launch_description():
 
     declare_js_topic = DeclareLaunchArgument(
         "js_topic",
-        # Der /a200_0553/robot_state_publisher (rendert /a200_0553/robot_description
-        # inkl. Greifer) abonniert /a200_0553/platform/joint_states -> dort liegen
-        # auch schon die Arm-Gelenke. Das Greifer-Gelenk MUSS auf dasselbe Topic.
-        default_value="/a200_0553/platform/joint_states",
-        description="joint_states-Topic fuer das Greifer-Gelenk (siehe Docstring).",
+        # Phase 2: Greifer publiziert im manipulators/endeffectors-Namespace (nicht
+        # mehr direkt in platform/joint_states). joint_states.launch.py relayt dieses
+        # Topic zurueck auf /a200_0553/platform/joint_states fuer RSP + move_group.
+        default_value="/a200_0553/manipulators/endeffectors/joint_states",
+        description="joint_states-Topic fuer die Greifer-Gelenke (siehe Docstring).",
     )
 
     # 1) RG6-Treiber im manipulators-Namespace (relative Namen loesen dann korrekt auf)

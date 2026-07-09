@@ -195,6 +195,26 @@ RViz: MotionPlanning panel → Planning Group `gripper` → Goal State
 > Display note: the URDF intentionally has no `<mimic>` tags, so RViz previews
 > only move `rg6_finger_joint`; the real/sim joint states animate all fingers.
 
+### Valid width feedback without a manual warm-up
+
+The RG6 only drives its width analog line (Tool-AI2) **after it has received its
+first motion command** since power-on; before that AI2 reads ~0 V. Two mechanisms
+keep this from breaking the state and MoveIt:
+
+- **`rg6_control` auto-prime** (`prime_on_ready`, default `true`): on the **rising
+  edge of `robot_program_running`** (ExternalControl becomes active — at boot *or*
+  when the arm is powered up late) `rg6_control` sets the tool voltage and issues
+  one **open** command, so AI2 becomes valid immediately. Runs **once per power-on**
+  (reset on `set_tool_power false`) — the ExternalControl restart after a URScript
+  `grip` does **not** re-open (would drop a grasped object). Delay after powering:
+  `prime_settle_s` (default 1.0 s).
+- **`rg6_joint_state_broadcaster` dead-zone gate** (`dead_input_threshold`, default
+  0.2 V): AI2 **below** this is treated as “no valid feedback" and the last good
+  angle is **held** instead of being mapped to a fake `closed`. Without it, the 0 V
+  pre-command reading clamps to `angle_closed` → wrong displayed state **and** a
+  poisoned MoveIt start state (planning from the fake value → the gripper can't be
+  moved in MoveIt). Must sit below the closed voltage `in_closed` (0.56 V).
+
 ---
 
 ## Calibration

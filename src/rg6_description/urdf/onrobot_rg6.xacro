@@ -16,28 +16,24 @@
           <color rgba="0.6 0.6 0.6 1" />
         </material>
       </visual>
-      <!-- ZWEI enge Huell-Boxen fuer den GANZEN Greifer, beide in DIESEM Link:
-           weiterhin keine Selbstkollision innerhalb des Greifers (mehrere
-           <collision>-Elemente eines Links bilden fuer MoveIt EINEN Koerper),
-           aber deutlich engere Umgebungs-/Armpruefung als die alte Einzelbox
-           0.11x0.19x0.25 (die blockierte z.B. Posen mit dem Greifer ueber dem
-           Husky-Topplate als Scheinkollision, s. hrl-Scan-Pose).
-           Masse aus den Visual-Meshes vermessen (twinlink/MuJoCo, voller
-           Fingerhub t=0..0.6), Marge ~5 mm:
-             Gehaeuse:  x[-0.036,+0.040] y[+-0.042] z[0..0.167]
-             Finger:    x[+-0.013]       y[+-0.078] z[0.121..0.283] (Hub-Union)
-           Gehaeuse-Box startet bei z=0.02 -> reicht NICHT in arm_0_wrist_3_link
-           zurueck (kein Handgelenk-Falschtreffer). -->
+      <!-- NUR NOCH die Gehaeuse-Huell-Box (Greifer-Koerper / Motorhaus) an
+           DIESEM Link. Frueher gab es zusaetzlich eine statische Finger-Huell-Box
+           (Union ueber den ganzen Fingerhub, origin 0 0 0.205, 0.036x0.166x0.170),
+           fest am base_link -> hat jeden Zugriff *zwischen* die Pads blockiert, so
+           dass Greifen im Planer unmoeglich war. Die Finger haben jetzt eigene
+           artikulierte Collision (onrobot_rg6_model_macro.xacro), die sich mit dem
+           Greifhub bewegt; die Intra-Greifer-Self-Collision wird per SRDF via
+           rg6_moveit_patch deaktiviert.
+           Gehaeuse-Masse aus den Visual-Meshes vermessen (twinlink/MuJoCo),
+           Marge ~5 mm: x[-0.036,+0.040] y[+-0.042] z[0..0.167].
+           Box startet bei z=0.02 -> reicht NICHT in arm_0_wrist_3_link zurueck
+           (kein Handgelenk-Falschtreffer). D435 (camera_0_link) sitzt auf der
+           Gehaeuse-Oberseite (robot.yaml: parent base_link, xyz 0.023/0/0.14) ->
+           base<->camera ist im SRDF 'Adjacent' deaktiviert. -->
       <collision>
         <origin xyz="0.002 0 0.095" rpy="0 0 0"/>
         <geometry>
           <box size="0.086 0.094 0.150"/>
-        </geometry>
-      </collision>
-      <collision>
-        <origin xyz="0 0 0.205" rpy="0 0 0"/>
-        <geometry>
-          <box size="0.036 0.166 0.170"/>
         </geometry>
       </collision>
     </link>

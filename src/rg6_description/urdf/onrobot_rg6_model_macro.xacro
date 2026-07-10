@@ -33,8 +33,19 @@
           <color rgba="0.6 0.6 0.6 1" />
         </material>
       </visual>
-      <!-- collision bewusst weggelassen: 4-Gelenk-Schleife im URDF-Baum -> sonst
-           Selbstkollision -> MoveIt-Planung schlaegt fehl. Greifer ist Anzeige-only. -->
+      <!-- Collision = Visual-Mesh. Frueher bewusst weggelassen (4-Gelenk-Schleife
+           -> Selbstkollision -> MoveIt-Planung schlug fehl, Greifer war Anzeige-only).
+           Jetzt: echte artikulierte Collision pro Link -> Greifen im Planer moeglich.
+           Die Selbstkollision der Intra-Greifer-Paare (4-Barlenk + Kamera + wrist_3 +
+           Fingerspitzen gegeneinander) wird per SRDF <disable_collisions> deaktiviert,
+           geschrieben vom rg6_moveit_patch (Marker 'collision-disable') NACH jedem
+           moveit_collision_updater-Lauf. Greifer prueft weiter gegen Welt/Arm. -->
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/visual/outer_knuckle.stl" />
+        </geometry>
+      </collision>
     </link>
   </xacro:macro>
 
@@ -54,7 +65,14 @@
           <color rgba="0.6 0.6 0.6 1" />
         </material>
       </visual>
-      <!-- collision weggelassen (siehe outer_knuckle). -->
+      <!-- collision: Visual-Mesh (siehe outer_knuckle); Intra-Greifer-Self-Collision
+           per SRDF via rg6_moveit_patch deaktiviert. -->
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/visual/inner_knuckle.stl" />
+        </geometry>
+      </collision>
     </link>
   </xacro:macro>
 
@@ -74,7 +92,16 @@
           <color rgba="0.12 0.12 0.12 1" />
         </material>
       </visual>
-      <!-- collision weggelassen (siehe outer_knuckle). -->
+      <!-- collision: Visual-Mesh. Dies sind die Greif-Pads (Kontaktflaeche zum
+           Objekt). Intra-Greifer-Self-Collision (inkl. link<->right Pads gegeneinander)
+           per SRDF via rg6_moveit_patch deaktiviert -> MoveIt kann close ohne
+           Self-Collision-Abbruch planen; rg6_control stoppt kraftgeregelt am Objekt. -->
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/visual/inner_finger.stl" />
+        </geometry>
+      </collision>
     </link>
   </xacro:macro>
 

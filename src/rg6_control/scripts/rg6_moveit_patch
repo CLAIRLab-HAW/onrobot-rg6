@@ -16,6 +16,12 @@ clearpath-custom-setup.py):
          ohne aktiv geplant zu werden (active DOF bleibt 1).
        + group_states 'open'/'close'
        + end_effector 'rg6' an arm_0_tool0 (parent_group arm_0)
+       + <disable_collisions reason="Always"> fuer ALLE Intra-Greifer-Paare
+         (Basis + 6 Finger + camera_0_link + arm_0_wrist_3_link), damit MoveIt
+         mit artikulierter Finger-Collision-Geometrie planen kann (4-Barlenk +
+         Kamera-gegen-Finger + Fingerspitzen-gegeneinander wuerden sonst als
+         Selbstkollision die Planung blockieren). Duplikatfrei gegenueber den
+         vom Updater selbst geschriebenen Adjacent/Never-Eintraegen.
   2. <setup>/manipulators/config/moveit.yaml:
        + moveit_simple_controller_manager: GripperCommand-Controller
          'manipulators/rg6_gripper_controller' (action_ns gripper_cmd) ->
@@ -43,6 +49,35 @@ TAG = "rg6_moveit_patch"
 
 MARKER_BEGIN = "<!-- onrobot-rg6:BEGIN (rg6_moveit_patch; nicht von Hand editieren) -->"
 MARKER_END = "<!-- onrobot-rg6:END -->"
+
+# Zweiter Marker-Block: deaktiviert alle Intra-Greifer-Self-Collision-Paare, damit
+# MoveIt mit artikulierten Finger-Collision-Geometrien planen kann. Ohne diesen
+# Block wuerden die 4-Barlenk-Schleife, die Kamera-auf-Greiferbasis-Montage und
+# die Fingerspitzen-gegeneinander als Selbstkollision die Planung blockieren (das
+# war der historische Grund, den Greifer collision-los als 'Anzeige-only' zu
+# modellieren). Laeuft NACH moveit_collision_updater, der /clearpath/robot.srdf
+# bei jedem Start neu erzeugt (mit Finger-Paaren, sobald die Finger Collision-
+# Geometrie haben). Gegen die WELT (Tisch, Objekt, andere Arm-Links) prueft der
+# Greifer weiterhin - nur die Intra-Assembly-Paare fallen weg.
+COLL_MARKER_BEGIN = "<!-- onrobot-rg6:BEGIN (collision-disable; nicht von Hand editieren) -->"
+COLL_MARKER_END = "<!-- onrobot-rg6:END (collision-disable) -->"
+
+# Greifer-Assembly: alle Links, deren paereweise Self-Collision deaktiviert wird.
+# rg6_*-Links bekommen das Praefix; Kamera (am Greiferbasis-Link montiert, s.
+# robot.yaml sensors.camera.parent) und UR-Handgelenk-3 (parent des Basis-Links)
+# sind nicht praefixiert.
+def gripper_assembly_links(prefix, camera_link, wrist_link):
+    return [
+        f"{prefix}onrobot_rg6_base_link",
+        f"{prefix}left_outer_knuckle",
+        f"{prefix}left_inner_knuckle",
+        f"{prefix}left_inner_finger",
+        f"{prefix}right_outer_knuckle",
+        f"{prefix}right_inner_knuckle",
+        f"{prefix}right_inner_finger",
+        camera_link,
+        wrist_link,
+    ]
 
 # Muss zu rg6_control/rg6_joint_state_broadcaster passen (0 = offen, + = zu)
 # und zu den Gelenknamen aus rg6_description (Praefix 'rg6_').
@@ -156,6 +191,84 @@ def patch_srdf(path, args):
     return True
 
 
+# ----------------- SRDF: Intra-Greifer-Self-Collision -----------------------
+def patch_srdf_gripper_collisions(path, args):
+    """Deaktiviert alle Intra-Greifer-Self-Collision-Paare im generierten SRDF.
+
+    Der moveit_collision_updater schreibt bei jedem Start /clearpath/robot.srdf
+    neu (Default-Collision-Matrix aus dem URDF). Sobald die Finger Collision-
+    Geometrie haben, erzeugt er Finger-Paare - einige deaktiviert er selbst
+    (reason Adjacent/Never), andere laesst er ENABLED (4-Barlenk-Paare,
+    Kamera-gegen-Finger, Fingerspitzen-gegeneinander), was MoveIt-Planung
+    blockiert. Diese Funktion ergaenzt die fehlenden <disable_collisions>-
+    Eintraege fuer alle Paare innerhalb der Greifer-Assembly, idempotent und
+    duplikatfrei: bereits vorhandene Eintraege (egal welcher reason, egal welche
+    link1/link2-Reihenfolge) werden uebersprungen.
+    """
+    if not os.path.isfile(path):
+        log(f"WARN: SRDF nicht gefunden, collision-disable uebersprungen: {path}",
+            err=True)
+        return False
+
+    with open(path) as f:
+        content = f.read()
+
+    links = gripper_assembly_links(args.prefix, args.camera_link, args.wrist_link)
+
+    # Bereits vorhandene disable_collisions-Paare (order-insensitiv) sammeln.
+    existing = set()
+    for m in re.finditer(
+            r'<disable_collisions\s+link1="([^"]+)"\s+link2="([^"]+)"', content):
+        existing.add(frozenset((m.group(1), m.group(2))))
+
+    # Alle C(n,2)-Paare der Assembly, die noch fehlen (kanonische Reihenfolge
+    # link1<link2 fuer stabiles Diff / deterministische Ausgabe).
+    entries = []
+    for i in range(len(links)):
+        for j in range(i + 1, len(links)):
+            if frozenset((links[i], links[j])) in existing:
+                continue
+            a, b = sorted((links[i], links[j]))
+            entries.append(
+                f'    <disable_collisions link1="{a}" link2="{b}" reason="Always"/>')
+
+    block_body = "\n".join(entries)
+    block = f"    {COLL_MARKER_BEGIN}\n{block_body}\n    {COLL_MARKER_END}\n"
+
+    if COLL_MARKER_BEGIN in content:
+        rx = re.compile(
+            r"[ \t]*" + re.escape(COLL_MARKER_BEGIN) + r".*?"
+            + re.escape(COLL_MARKER_END) + r"\n?", re.DOTALL)
+        new_content = rx.sub(block, content)
+        action = "aktualisiert"
+    else:
+        idx = content.rfind("</robot>")
+        if idx < 0:
+            log(f"WARN: SRDF ohne </robot>?! collision-disable uebersprungen "
+                f"({path}).", err=True)
+            return False
+        new_content = content[:idx] + block + content[idx:]
+        action = "eingefuegt"
+
+    if not entries:
+        # Alle Paare schon deaktiviert (z. B. vom Updater als Adjacent/Never).
+        log(f"SRDF: keine neuen collision-disable-Eintraege noetig ({path}).")
+        return False
+
+    # Wohlgeformtheit sicherstellen, bevor irgendetwas geschrieben wird.
+    try:
+        ET.fromstring(new_content)
+    except ET.ParseError as e:
+        log(f"FEHLER: gepatchtes SRDF nicht wohlgeformt ({e}) - keine Aenderung.",
+            err=True)
+        return False
+
+    atomic_write(path, new_content)
+    log(f"SRDF: {len(entries)} Intra-Greifer-collision-disable-Eintraege "
+        f"{action} ({path}).")
+    return True
+
+
 # --------------------------- moveit.yaml ------------------------------------
 def patch_moveit_yaml(path, args):
     """GripperCommand-Controller + joint_limits ins generierte moveit.yaml."""
@@ -257,11 +370,17 @@ def main():
                         help="joint_limits max_velocity [rad/s] (default: 2.0)")
     parser.add_argument("--max-acceleration", type=float, default=4.0,
                         help="joint_limits max_acceleration [rad/s^2] (default: 4.0)")
+    parser.add_argument("--camera-link", default="camera_0_link",
+                        help="Kamera-Link am Greifer (default: camera_0_link)")
+    parser.add_argument("--wrist-link", default="arm_0_wrist_3_link",
+                        help="UR-Handgelenk-Link, parent des Greifers "
+                             "(default: arm_0_wrist_3_link)")
     args = parser.parse_args()
 
     setup = args.setup_path.rstrip("/")
     log(f"Start (setup: {setup}).")
     patch_srdf(os.path.join(setup, "robot.srdf"), args)
+    patch_srdf_gripper_collisions(os.path.join(setup, "robot.srdf"), args)
     patch_moveit_yaml(os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
     log("Fertig.")
     return 0

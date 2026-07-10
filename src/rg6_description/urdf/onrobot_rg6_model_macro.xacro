@@ -30,7 +30,7 @@
           <mesh filename="package://rg6_description/meshes/visual/outer_knuckle.stl" />
         </geometry>
         <material name="rg6_silver">
-          <color rgba="0.8 0.8 0.8 1" />
+          <color rgba="0.6 0.6 0.6 1" />
         </material>
       </visual>
       <!-- collision bewusst weggelassen: 4-Gelenk-Schleife im URDF-Baum -> sonst
@@ -51,7 +51,7 @@
           <mesh filename="package://rg6_description/meshes/visual/inner_knuckle.stl" />
         </geometry>
         <material name="rg6_silver">
-          <color rgba="0.8 0.8 0.8 1" />
+          <color rgba="0.6 0.6 0.6 1" />
         </material>
       </visual>
       <!-- collision weggelassen (siehe outer_knuckle). -->
@@ -71,7 +71,7 @@
           <mesh filename="package://rg6_description/meshes/visual/inner_finger.stl" />
         </geometry>
         <material name="rg6_black">
-          <color rgba="0.1 0.1 0.1 1" />
+          <color rgba="0.12 0.12 0.12 1" />
         </material>
       </visual>
       <!-- collision weggelassen (siehe outer_knuckle). -->

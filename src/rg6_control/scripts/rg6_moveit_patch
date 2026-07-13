@@ -15,7 +15,9 @@ clearpath-custom-setup.py):
          finger_joint abgeleitet -> saubere Preview von Oeffnen/Schliessen,
          ohne aktiv geplant zu werden (active DOF bleibt 1).
        + group_states 'open'/'close'
-       + end_effector 'rg6' an arm_0_tool0 (parent_group arm_0)
+       + end_effector 'rg6' parent_group arm_0, parent_link arm_0_wrist_3_link
+         (tiefstes arm_0-Mitglied; tool0 ist kein arm_0-Member, s. Kommentar am
+         SRDF_FRAGMENT_TEMPLATE)
        + <disable_collisions reason="Always"> fuer ALLE Intra-Greifer-Paare
          (Basis + 6 Finger + camera_0_link + arm_0_wrist_3_link), damit MoveIt
          mit artikulierter Finger-Collision-Geometrie planen kann (4-Barlenk +
@@ -107,10 +109,23 @@ SRDF_FRAGMENT_TEMPLATE = """\
     <group_state name="close" group="{gripper_group}">
         <joint name="{prefix}finger_joint" value="{angle_closed}"/>
     </group_state>
-    <end_effector name="rg6" parent_link="{tool_frame}" group="{gripper_group}"/>"""
-# Hinweis: bewusst KEIN parent_group="arm_0" am end_effector - Clearpaths
-# arm_0-Gruppe ist joint-basiert und enthaelt arm_0_tool0 nicht als Link ->
-# move_group wuerde "does not include the parent link" loggen und es ignorieren.
+    <end_effector name="rg6" parent_link="{parent_link}" parent_group="{parent_group}" group="{gripper_group}"/>"""
+# parent_link = arm_0_wrist_3_link (NICHT arm_0_tool0) + explizites
+# parent_group="arm_0". Grund: moveit_core::RobotModel::buildGroupsInfoEndEffectors
+# fordert fuer die EE-Elterngruppe hasLinkModel(parent_link) auf parent_group.
+# Clearpaths arm_0 ist joint-basiert (6 UR-Gelenke shoulder_pan..wrist_3); ihre
+# Member-Links reichen bis arm_0_wrist_3_link. arm_0_tool0 (und flange) sind feste
+# Kind-Links von wrist_3_link JENSEITS des letzten Gelenks -> KEINE Mitglieder von
+# arm_0 (und keiner anderen Gruppe). Folgen:
+#   * parent_link=arm_0_tool0 OHNE parent_group  -> possible_parent_groups leer
+#     -> WARN "Could not identify parent group for end-effector 'rg6'",
+#        setEndEffectorParent("", ...) -> Greifer nicht an arm_0 angebunden.
+#   * parent_link=arm_0_tool0 MIT parent_group=arm_0 -> ERROR
+#     "Group 'arm_0' ... does not include the parent link 'arm_0_tool0'".
+# arm_0_wrist_3_link ist das tiefste Link IN arm_0 und URDF-Vorfahre des Greifers
+# -> beides verschwindet, arm_0.attachEndEffector('rg6') wird gerufen. wrist_3_link
+# vs tool0 differiert nur um die feste Flansch-Transform; Greifer-Posen/IK laufen
+# ueber den vollen kinematischen Baum bzw. den Gripper-TCP -> ohne Auswirkung.
 
 
 def log(msg, err=False):
@@ -151,7 +166,8 @@ def patch_srdf(path, args):
         prefix=args.prefix,
         angle_open=args.angle_open,
         angle_closed=args.angle_closed,
-        tool_frame=args.tool_frame,
+        parent_link=args.parent_link,
+        parent_group=args.parent_group,
     )
     block = f"    {MARKER_BEGIN}\n{fragment}\n    {MARKER_END}\n"
 
@@ -353,8 +369,13 @@ def main():
                         help="Gelenk-/Linkpraefix des Greifermodells (default: rg6_)")
     parser.add_argument("--gripper-group", default="gripper",
                         help="Name der MoveIt-Greifergruppe (default: gripper)")
-    parser.add_argument("--tool-frame", default="arm_0_tool0",
-                        help="Elternframe des Endeffektors (default: arm_0_tool0)")
+    parser.add_argument("--parent-group", default="arm_0",
+                        help="MoveIt-Planungsgruppe, an die der EE als Elterngruppe "
+                             "gebunden wird (default: arm_0)")
+    parser.add_argument("--parent-link", default="arm_0_wrist_3_link",
+                        help="Parent-Link des EE - MUSS ein Mitglied der parent_group "
+                             "sein (default: arm_0_wrist_3_link; NICHT arm_0_tool0, da "
+                             "tool0 kein Mitglied der joint-basierten arm_0-Gruppe ist)")
     parser.add_argument("--angle-open", default="0.0",
                         help="rg6_finger_joint-Winkel 'open' (default: 0.0)")
     parser.add_argument("--angle-closed", default="0.6",

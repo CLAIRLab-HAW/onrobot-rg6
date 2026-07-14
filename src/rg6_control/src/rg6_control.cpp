@@ -945,18 +945,58 @@ private:
           "RG6-Action: Zwischenweite %.3f rad mit grip_backend=io nicht praezise "
           "erreichbar -> naechste Endlage (%s)", target_angle, close_cmd ? "close" : "open");
       }
-      const auto pin = static_cast<int8_t>(get_parameter("io_grip_pin").as_int());
-      // Edge-gesichert (s. handle_open_close): Flanke auf DO0, nicht nur statischer Level.
-      sent = send_grip_do_edge(pin, close_cmd ? 1.0f : 0.0f);
-      if (sent) {
+      // Pre-Check: Greifer schon im Zielzustand -> kein Edge-Toggle noetig.
+      // Vermeidet das "zu und wieder auf"-Jitter, das send_grip_do_edge sonst
+      // erzwingt (der RG6 reagiert auf die Flanke auf DO0, nicht auf den
+      // statischen Level -> ein redundantes open/close treibt ihn kurz in die
+      // Gegenendlage). WICHTIG - Wake-up-Garantie: unterdrueckt wird NUR, wenn
+      // der Greifer seit dem Einschalten bereits geprimt ist (primed_once_,
+      // s. on_external_control_ready / README "RG6 treibt AI2 erst nach dem
+      // ersten Kommando"). Vor dem Priming ist AI2 unzuverlaessig; also in
+      // jedem Fall das Edge erzwingen -> einmal Bestromung/Flanke geben, damit
+      // AI2 gueltig wird und keine Stale-Zustaende bleiben. primed_once_ wird
+      // bei echtem Tool-Power-Off zurueckgesetzt (handle_set_tool_power) -> beim
+      // Neustart des Arms greift das Wake-up wieder. Konsistent zu handle_open_close.
+      bool already_at_target = false;
+      {
         std::lock_guard<std::mutex> lk(state_mutex_);
-        last_command_ = close_cmd ? rg6_msgs::msg::GripperState::COMMAND_CLOSE :
-          rg6_msgs::msg::GripperState::COMMAND_OPEN;
+        const bool primed = primed_once_;
+        const double dead = get_parameter("dead_input_threshold").as_double();
+        if (primed && have_tool_data_ && width_raw_ >= dead) {
+          const double w = width_from_raw(width_raw_);
+          const double w_open = get_parameter("width_open_m").as_double();
+          const double w_closed = get_parameter("width_closed_m").as_double();
+          const double eps = 0.01;  // [m] Schwelle fuer "im Zielzustand"
+          already_at_target = close_cmd ? (w <= w_closed + eps) : (w >= w_open - eps);
+        }
       }
-      if (sent) {
-        motion = wait_motion_done(canceled);
+      if (already_at_target) {
+        RCLCPP_INFO(get_logger(), "RG6-Action: Greifer bereits in Zielzustand (%s) - kein Edge-Toggle",
+          close_cmd ? "close" : "open");
+        sent = true;
+        {
+          std::lock_guard<std::mutex> lk(state_mutex_);
+          last_command_ = close_cmd ? rg6_msgs::msg::GripperState::COMMAND_CLOSE :
+            rg6_msgs::msg::GripperState::COMMAND_OPEN;
+        }
+        // Keine Bewegung: direkt als settled mit Ist-Position melden, so dass
+        // reached_goal wahr wird und das Goal succceed statt wait_motion_done.
+        motion.settled = true;
+        motion.final_angle = current_angle();
       } else {
-        error = "set_io nicht verfuegbar";
+        const auto pin = static_cast<int8_t>(get_parameter("io_grip_pin").as_int());
+        // Edge-gesichert (s. handle_open_close): Flanke auf DO0, nicht nur statischer Level.
+        sent = send_grip_do_edge(pin, close_cmd ? 1.0f : 0.0f);
+        if (sent) {
+          std::lock_guard<std::mutex> lk(state_mutex_);
+          last_command_ = close_cmd ? rg6_msgs::msg::GripperState::COMMAND_CLOSE :
+            rg6_msgs::msg::GripperState::COMMAND_OPEN;
+        }
+        if (sent) {
+          motion = wait_motion_done(canceled);
+        } else {
+          error = "set_io nicht verfuegbar";
+        }
       }
     } else {
       // Zwischenweite -> URScript-Grip mit Kraft aus max_effort.

@@ -4,12 +4,12 @@ fusion2urdf](https://github.com/syuntoku14/fusion2urdf.git) and the STEP file pr
 
 Note:
 
-If the default angle between the adapter and the main body of the gripper has been changed by the user, update rpy under the joint g_main in rg6_description.xacro:
-
-```xml
-<joint name="g_main" type="fixed">
-  <origin xyz="-0.031849 1e-06 0.04953" rpy="0 0 0"/>
-  <parent link="base_link"/>
-  <child link="g_main_1"/>
-</joint>
-```
+This fork's URDF is xacro-based and does not contain the `g_main` joint or the
+`rg6_description.xacro` file from the original fusion2urdf output. The gripper
+base link is `${prefix}onrobot_rg6_base_link`, defined in
+`urdf/onrobot_rg6.xacro`; the finger joints and their `<mimic>` multipliers
+live in `urdf/onrobot_rg6_model_macro.xacro`. The fixed transform from the UR
+tool to the gripper base is `rg6_tool0_to_base` in
+`urdf/clearpath_extras.urdf.xacro` (`parent arm_0_tool0` → `child
+rg6_onrobot_rg6_base_link`). Adjust the `rpy` there if the adapter angle
+changes.

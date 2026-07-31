@@ -52,8 +52,10 @@ gripper function — do it in MoveIt if needed.
   automatically calls `io_and_status_controller/resend_robot_program`
   afterwards (`resend_program_after_grip`).
 - **`rg6_joint_state_broadcaster`** maps Tool-AI2 to the model's driving joint
-  `rg6_finger_joint` (+ 5 follower joints published explicitly — the URDF has
-  no `<mimic>`, some parsers/Foxglove choke on it).
+  `rg6_finger_joint` (+ 5 follower joints published explicitly as a fallback for
+  older `robot_state_publisher`/parsers without `<mimic>` support and for
+  live-tuning of the AI2 mapping; values are identical to the URDF `<mimic>`
+  multipliers, which the jazzy RSP and MoveIt now evaluate directly).
 - **Simulation** (`rg6_control_sim`): identical ROS surface (services, `grip`,
   action, `rg6/state`) without hardware; publishes the 6 gripper joints itself.
   `sim_object_width_m` emulates an object (close stops there → `grip_detected`).
@@ -149,8 +151,11 @@ ros2 launch rg6_control rg6_control.launch.py gripper_sim:=true
 MoveIt talks to the gripper through the standard **GripperCommand** pipeline:
 
 1. **SRDF**: planning group `gripper` (joint `rg6_finger_joint`), end effector
-   `rg6` at `arm_0_tool0`, named states `open` (0.0) / `close` (0.6), the 5
-   follower joints as `passive_joint`.
+   `rg6` at `arm_0_wrist_3_link` (parent_group `arm_0` — `arm_0_tool0` is not a
+   member of the joint-based `arm_0` group, so the EE would not attach), named
+   states `open` (0.0) / `close` (0.6), the 5 follower joints listed as
+   `<joint>` in the `gripper` group (driven from `rg6_finger_joint` via the
+   URDF `<mimic>` tags).
 2. **moveit.yaml**: `moveit_simple_controller_manager` entry
    `manipulators/rg6_gripper_controller` (type `GripperCommand`, action_ns
    `gripper_cmd`, `max_effort` 60 N) + `joint_limits` for `rg6_finger_joint`
@@ -192,8 +197,10 @@ group.set_named_target("close"); group.go()    # stops+succeeds on object contac
 RViz: MotionPlanning panel → Planning Group `gripper` → Goal State
 `open`/`close` → Plan & Execute.
 
-> Display note: the URDF intentionally has no `<mimic>` tags, so RViz previews
-> only move `rg6_finger_joint`; the real/sim joint states animate all fingers.
+> Display note: the URDF carries `<mimic>` tags (official OnRobot multipliers),
+> so RViz/MoveIt previews animate all fingers from `rg6_finger_joint`; the
+> `rg6_joint_state_broadcaster` additionally publishes the 5 followers
+> explicitly as a fallback for parsers that ignore `<mimic>`.
 
 ### Valid width feedback without a manual warm-up
 
@@ -262,7 +269,7 @@ Validation procedure (hand on the e-stop, workspace clear):
 Unchanged from before: workspace in `system.ros2.workspaces`,
 `io_and_status_controller` via `robot.yaml` `ros_parameters`, visual model via
 `platform.extras.urdf` (`clearpath_extras.urdf.xacro`), autostart via
-`rg6-bringup.service` (now also starts `urscript_interface`). The gripper
+`clearpath-custom-rg6-bringup.service` (now also starts `urscript_interface`). The gripper
 publishes joint states on `manipulators/endeffectors/joint_states`; the
 `joint_state_relay` mirrors them (RELIABLE) onto `platform/joint_states` for
 `robot_state_publisher` + `move_group`, and `joint_state_aggregator` builds the

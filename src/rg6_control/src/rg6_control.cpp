@@ -40,6 +40,7 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 
 #include "control_msgs/action/gripper_command.hpp"
+#include "rg6_control/analog_model.hpp"
 #include "rg6_msgs/msg/gripper_state.hpp"
 #include "rg6_msgs/srv/grip.hpp"
 #include "std_msgs/msg/bool.hpp"
@@ -242,8 +243,13 @@ private:
 
     // Analog-Kalibrierung Tool-AI2 -> Weite (live nachjustierbar):
     //   ros2 topic echo .../io_and_status_controller/tool_data
-    declare_parameter<double>("width_in_open", 10.0);    // [V] AI2 bei ganz offen
-    declare_parameter<double>("width_in_closed", 0.56);  // [V] AI2 bei ganz zu
+    // Die Defaults liegen als Konstanten in analog_model.hpp, weil der Sim-Node
+    // dieselbe Kalibrierung rueckwaerts rechnet -- eine Aenderung hier gilt
+    // damit automatisch auch dort.
+    declare_parameter<double>("width_in_open",
+      rg6_control::analog::kWidthInOpenV);              // [V] AI2 bei ganz offen
+    declare_parameter<double>("width_in_closed",
+      rg6_control::analog::kWidthInClosedV);            // [V] AI2 bei ganz zu
     declare_parameter<double>("width_open_m", 0.160);    // [m] RG6-Hub offen
     declare_parameter<double>("width_closed_m", 0.0);    // [m] zu
 
@@ -274,7 +280,8 @@ private:
     // erstem Kommando). Pre-Check "bereits im Zielzustand" dann NICHT vertrauen, sondern
     // Edge erzwingen (bewegt den Greifer, macht AI2 danach gueltig). Muss unter
     // width_in_closed (0.56 V) liegen.
-    declare_parameter<double>("dead_input_threshold", 0.2);  // [V]
+    declare_parameter<double>("dead_input_threshold",
+      rg6_control::analog::kDeadInputThresholdV);  // [V]
 
     // Zustands-Publisher.
     declare_parameter<double>("state_rate", 20.0);

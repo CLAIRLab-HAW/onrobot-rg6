@@ -32,6 +32,12 @@ target_link_libraries(rg6_joint_state_broadcaster PUBLIC
 )
 
 
+# Analog-Kalibrierung (AI2 <-> Weite) liegt als Header in include/ -- Realtreiber
+# und Sim teilen sie sich, damit der Sim nicht stillschweigend anders kalibriert
+# ist als das Geraet.
+target_include_directories(rg6_control PRIVATE include)
+target_include_directories(rg6_control_sim PRIVATE include)
+
 target_link_libraries(rg6_control
   rclcpp::rclcpp
   rclcpp_action::rclcpp_action
@@ -76,5 +82,13 @@ install(PROGRAMS scripts/rg6_moveit_patch
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Reiner Rechen-Test des Analogmodells -- braucht weder ROS-Graph noch Hardware.
+# Bewusst KEIN ament_lint_auto: die bestehenden Quellen sind nie gelintet worden,
+# das nachtraeglich zu erzwingen wuerde den Build fuer alle brechen.
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_analog_model test/test_analog_model.cpp)
+  target_include_directories(test_analog_model PRIVATE include)
+endif()
 
 ament_package()

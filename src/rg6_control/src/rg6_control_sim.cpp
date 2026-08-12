@@ -13,6 +13,26 @@
 // Bewegungsmodell: Weite faehrt mit konstanter Geschwindigkeit auf die Zielweite.
 // Mit sim_object_width_m > 0 stoppt das Schliessen an der Objektweite ->
 // grip_detected=true (wie das Tool-DI0-Signal der echten Hardware).
+//
+// Analoger Rueckkanal: width_raw traegt an der Hardware die AI2-Spannung des
+// Tool-Anschlusses, aus der der Realtreiber die Weite ueberhaupt erst gewinnt.
+// Der Sim rechnet sie aus seiner Weite zurueck (analog_model.hpp) statt NaN zu
+// melden -- sonst widerspricht er sich selbst: er setzt tool_data_received=true,
+// behauptet also, die Tool-Daten seien da, und liefert dann keine.  Der
+// Verfuegbarkeits-Guard der plan-bridge liest genau dieses Feld und feuerte
+// darum im Container bei JEDEM Greifer-Kommando, obwohl der Sim die Ziele
+// korrekt anfuhr.  Ein Guard, der immer feuert, ist Rauschen.
+//
+// force_raw bleibt bewusst NaN: das ist der Motorstrom (AI3), fuer den es hier
+// kein ehrliches Modell gibt -- die Kraft haengt an Backengeometrie, Objekt und
+// Preset.  Kein Verbraucher liest ihn; erfundene Zahlen waeren schlechter als
+// ein offenes "nicht gemessen".
+//
+// Grenze: das macht den Greifer im Container benutzbar, mehr nicht.  Die echten
+// RG6-Pathologien bleiben unabgedeckt (AI2 haengt bei zuen Backen auf 10 V, ein
+// injizierter grip reisst ExternalControl ab).  Ein Erfolg aus diesem Node ist
+// ueber das source-Feld in /twin/result ohnehin als Nicht-Hardware-Wahrheit
+// gekennzeichnet.
 
 #include <algorithm>
 #include <atomic>
@@ -30,6 +50,7 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 
 #include "control_msgs/action/gripper_command.hpp"
+#include "rg6_control/analog_model.hpp"
 #include "rg6_msgs/msg/gripper_state.hpp"
 #include "rg6_msgs/srv/grip.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
@@ -44,14 +65,7 @@ namespace
 {
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
-double map_clamped(double x, double x0, double x1, double y0, double y1)
-{
-  if (std::abs(x1 - x0) < 1e-12) {
-    return y0;
-  }
-  const double y = y0 + (x - x0) * (y1 - y0) / (x1 - x0);
-  return std::clamp(y, std::min(y0, y1), std::max(y0, y1));
-}
+using rg6_control::analog::map_clamped;
 }  // namespace
 
 class RG6ControlSimNode : public rclcpp::Node
@@ -71,6 +85,16 @@ public:
     declare_parameter<double>("state_rate", 20.0);
     declare_parameter<double>("action_goal_angle_tol", 0.08);
     declare_parameter<std::string>("joint_prefix", "rg6_");
+
+    // Analog-Kalibrierung des Rueckkanals -- 1:1 die Defaults des Realtreibers
+    // (analog_model.hpp).  Wer sie am Geraet nachjustiert, zieht sie hier mit.
+    declare_parameter<double>("width_in_open", rg6_control::analog::kWidthInOpenV);
+    declare_parameter<double>("width_in_closed", rg6_control::analog::kWidthInClosedV);
+    // AI2 bei weggenommener Toolspannung.  Muss unter dead_input_threshold
+    // (0,2 V) des Realtreibers liegen, sonst laesst sich der Totzustand im
+    // Container nicht mehr provozieren -- das ist die Bedingung, unter der ein
+    // simulierter Analogwert ueberhaupt vertretbar ist.
+    declare_parameter<double>("sim_width_in_dead", rg6_control::analog::kSimDeadInputV);
 
     width_ = get_parameter("width_open_m").as_double();
     target_width_ = width_;
@@ -228,6 +252,19 @@ private:
       get_parameter("angle_open").as_double(),
       get_parameter("width_closed_m").as_double(),
       get_parameter("width_open_m").as_double());
+  }
+
+  // Weite -> AI2-Spannung: der Weg, den nur der Sim geht.  Die Hardware misst
+  // AI2 und rechnet vorwaerts (rg6_control.cpp: width_from_raw), der Sim kennt
+  // die Weite und muss den Messwert daraus erzeugen.
+  double raw_from_width(double width_m) const
+  {
+    return rg6_control::analog::raw_from_width(
+      width_m,
+      get_parameter("width_closed_m").as_double(),
+      get_parameter("width_open_m").as_double(),
+      get_parameter("width_in_closed").as_double(),
+      get_parameter("width_in_open").as_double());
   }
 
   struct MotionResult
@@ -403,8 +440,12 @@ private:
     msg.header.stamp = get_clock()->now();
     std::lock_guard<std::mutex> lk(mutex_);
     msg.width = width_;
-    msg.width_raw = kNaN;
-    msg.force_raw = kNaN;
+    // Stromlos faellt der Analogeingang unter die Totschwelle -- genau das Signal,
+    // an dem die plan-bridge "Kommando kann nicht wirken" erkennt.  Bestromt
+    // traegt er ueber den ganzen Hub die zurueckgerechnete Weite.
+    msg.width_raw = tool_power_on_ ?
+      raw_from_width(width_) : get_parameter("sim_width_in_dead").as_double();
+    msg.force_raw = kNaN;  // Motorstrom AI3: kein ehrliches Modell, s. Dateikopf
     msg.busy = moving_;
     msg.grip_detected = grip_detected_;
     msg.io_states_received = true;

@@ -3,8 +3,8 @@
 
 Startet:
   1. rg6_control (Vollausbau-Treiber) im manipulators-Namespace:
-     Services rg6_control/{open,close,open_gripper,close_gripper,grip,
-     set_force_preset,set_tool_power}, Topic rg6/state und die
+     Services rg6_control/{open,close,grip,set_force_preset,
+     set_tool_power}, Topic rg6/state und die
      GripperCommand-Action rg6_gripper_controller/gripper_cmd (MoveIt).
   2. rg6_joint_state_broadcaster -> mappt tool_data.analog_input2 auf das
      Gelenk 'rg6_finger_joint' (+5 Folgegelenke) und publiziert joint_states.

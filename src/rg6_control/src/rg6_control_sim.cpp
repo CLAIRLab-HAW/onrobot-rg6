@@ -1,7 +1,7 @@
 // rg6_control_sim: Simulations-Zwilling von rg6_control OHNE UR-Hardware.
 //
 // Bietet dieselbe ROS-Schnittstelle wie der Realtreiber:
-//   Services rg6_control/{open,close,open_gripper,close_gripper} (Trigger),
+//   Services rg6_control/{open,close} (Trigger),
 //            rg6_control/grip (rg6_msgs/Grip),
 //            rg6_control/set_force_preset, rg6_control/set_tool_power (SetBool)
 //   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
@@ -124,8 +124,6 @@ public:
       };
     open_service_ = make_trigger("rg6_control/open", false);
     close_service_ = make_trigger("rg6_control/close", true);
-    open_alias_service_ = make_trigger("rg6_control/open_gripper", false);
-    close_alias_service_ = make_trigger("rg6_control/close_gripper", true);
 
     grip_service_ = create_service<rg6_msgs::srv::Grip>(
       "rg6_control/grip",
@@ -458,7 +456,6 @@ private:
 
   rclcpp::CallbackGroup::SharedPtr blocking_cb_group_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_service_, close_service_;
-  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_alias_service_, close_alias_service_;
   rclcpp::Service<rg6_msgs::srv::Grip>::SharedPtr grip_service_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr force_preset_service_, tool_power_service_;
   rclcpp_action::Server<GripperCommand>::SharedPtr action_server_;

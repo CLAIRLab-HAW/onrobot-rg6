@@ -144,7 +144,7 @@ public:
       std::chrono::duration<double>(1.0 / std::max(1.0, state_rate)),
       [this]() { publish_state(); });
 
-    // --- Services (Namen 'open'/'close' + deployte Aliasse '*_gripper') ----
+    // --- Services ('open'/'close' sind die einzigen Namen) -----------------
     auto make_trigger = [this](const std::string & name, bool close_cmd) {
         return create_service<std_srvs::srv::Trigger>(
           name,
@@ -157,8 +157,6 @@ public:
       };
     open_service_ = make_trigger("rg6_control/open", false);
     close_service_ = make_trigger("rg6_control/close", true);
-    open_alias_service_ = make_trigger("rg6_control/open_gripper", false);
-    close_alias_service_ = make_trigger("rg6_control/close_gripper", true);
 
     grip_service_ = create_service<rg6_msgs::srv::Grip>(
       "rg6_control/grip",
@@ -1084,7 +1082,6 @@ private:
   rclcpp::CallbackGroup::SharedPtr blocking_cb_group_;
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_service_, close_service_;
-  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_alias_service_, close_alias_service_;
   rclcpp::Service<rg6_msgs::srv::Grip>::SharedPtr grip_service_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr force_preset_service_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr tool_power_service_;

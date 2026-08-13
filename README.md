@@ -9,7 +9,7 @@ interface:
 
 | RG6 hardware function | Channel | ROS interface |
 |---|---|---|
-| Open / close to preset width | Tool-DO0 level (`set_io` pin 16) | `rg6_control/open`, `rg6_control/close` (+ `open_gripper`/`close_gripper` aliases, `std_srvs/Trigger`) |
+| Open / close to preset width | Tool-DO0 level (`set_io` pin 16) | `rg6_control/open`, `rg6_control/close` (`std_srvs/Trigger`) |
 | Force preset select (low/high) | Tool-DO1 level (`set_io` pin 17) | `rg6_control/set_force_preset` (`std_srvs/SetBool`) |
 | **Target width + force** (0–160 mm, 25–120 N) | 17-bit word clocked on Tool-DO0/DO1 (OnRobot URCap protocol) via **URScript injection** | `rg6_control/grip` (`rg6_msgs/Grip`) |
 | Width feedback | Tool-AI2 (analog) | `rg6/state.width` [m], joint_states animation |
@@ -128,8 +128,8 @@ ros2 launch rg6_control rg6_control.launch.py gripper_sim:=true
 
 | Interface | Name (relative) | Type |
 |---|---|---|
-| Service | `rg6_control/open` / `rg6_control/open_gripper` | `std_srvs/srv/Trigger` |
-| Service | `rg6_control/close` / `rg6_control/close_gripper` | `std_srvs/srv/Trigger` |
+| Service | `rg6_control/open` | `std_srvs/srv/Trigger` |
+| Service | `rg6_control/close` | `std_srvs/srv/Trigger` |
 | Service | `rg6_control/grip` | `rg6_msgs/srv/Grip` |
 | Service | `rg6_control/set_force_preset` | `std_srvs/srv/SetBool` |
 | Service | `rg6_control/set_tool_power` | `std_srvs/srv/SetBool` |

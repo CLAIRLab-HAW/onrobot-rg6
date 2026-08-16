@@ -35,6 +35,7 @@ target_link_libraries(rg6_joint_state_broadcaster PUBLIC
 # Analog-Kalibrierung (AI2 <-> Weite) liegt als Header in include/ -- Realtreiber
 # und Sim teilen sie sich, damit der Sim nicht stillschweigend anders kalibriert
 # ist als das Geraet.
+target_include_directories(rg6_joint_state_broadcaster PRIVATE include)
 target_include_directories(rg6_control PRIVATE include)
 target_include_directories(rg6_control_sim PRIVATE include)
 

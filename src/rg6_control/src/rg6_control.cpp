@@ -253,8 +253,15 @@ private:
 
     // Gelenkwinkel-Konvention des Modells (rg6_finger_joint): 0 = offen, + = zu.
     // Muss zu rg6_joint_state_broadcaster (angle_open/angle_closed) passen.
-    declare_parameter<double>("angle_open", 0.0);
-    declare_parameter<double>("angle_closed", 0.6);
+    //
+    // Die Werte kommen seit 2026-08-16 aus der GETRIEBEGEOMETRIE
+    // (rg6_control::linkage), nicht mehr aus einer Schaetzung. Die alten
+    // (0.0 / 0.6) trafen weder Ende: bei 0.0 stehen die Backen 93,8 mm
+    // auseinander (nicht 160 mm), bei 0.6 bleiben 4,8 mm Spalt. Sie werden
+    // hier NUR noch als Endpunkt-Anker benutzt (Endlagen-Erkennung), das
+    // Umrechnen macht die Kinematik selbst.
+    declare_parameter<double>("angle_open", -rg6_control::linkage::kCrankPhaseRad);
+    declare_parameter<double>("angle_closed", rg6_control::linkage::kClosedAngleRad);
 
     // Bewegungserkennung ueber tool_data (Fallback, wenn io_states fehlt) und
     // Settle-Kriterium (deckt auch "auf Objekt geklemmt" als Erfolg ab).
@@ -323,24 +330,16 @@ private:
       get_parameter("width_open_m").as_double());
   }
 
-  double angle_from_width(double width_m) const
+  // Weite <-> Fingergelenk: die Getriebekinematik, keine Gerade zwischen zwei
+  // Ankern.  Begruendung und Messreihe bei ``rg6_control::linkage``.
+  static double angle_from_width(double width_m)
   {
-    return map_clamped(
-      width_m,
-      get_parameter("width_closed_m").as_double(),
-      get_parameter("width_open_m").as_double(),
-      get_parameter("angle_closed").as_double(),
-      get_parameter("angle_open").as_double());
+    return rg6_control::linkage::angle_from_width(width_m);
   }
 
-  double width_from_angle(double angle) const
+  static double width_from_angle(double angle)
   {
-    return map_clamped(
-      angle,
-      get_parameter("angle_closed").as_double(),
-      get_parameter("angle_open").as_double(),
-      get_parameter("width_closed_m").as_double(),
-      get_parameter("width_open_m").as_double());
+    return rg6_control::linkage::width_from_angle(angle);
   }
 
   bool send_set_io(int8_t fun, int8_t pin, float state, bool wait_for_service = true)

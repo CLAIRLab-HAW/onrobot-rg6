@@ -111,7 +111,7 @@
       <parent link="${prefix}onrobot_rg6_base_link" />
       <child link="${prefix}${fingerprefix}_inner_knuckle" />
       <axis xyz="1 0 0" />
-      <limit lower="-0.628319" upper="0.628319" velocity="2.0" effort="1000" />
+      <limit lower="-0.937570" upper="0.628319" velocity="2.0" effort="1000" />
       <mimic joint="${prefix}finger_joint" multiplier="-1" offset="0" />
     </joint>
   </xacro:macro>
@@ -122,20 +122,32 @@
       <parent link="${prefix}${fingerprefix}_outer_knuckle" />
       <child link="${prefix}${fingerprefix}_inner_finger" />
       <axis xyz="1 0 0" />
-      <limit lower="-0.872665" upper="0.872665" velocity="2.0" effort="1000" />
+      <limit lower="-0.937570" upper="0.872665" velocity="2.0" effort="1000" />
       <mimic joint="${prefix}finger_joint" multiplier="1" offset="0" />
     </joint>
   </xacro:macro>
 
   <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg6.xacro" />
 
+  <!-- GELENKGRENZEN, offene Seite (2026-08-16).
+       Die untere Grenze lag symmetrisch bei -0.628319 (+-36 Grad). Die
+       Kinematik dieses Getriebes gibt aber mehr her: der Abstand der beiden
+       inner_finger-Ursprunge ist 2*(0.024112 + 0.080*cos(q + 0.93757)), also
+       maximal bei q = -0.93757 (Kurbel-Totlage). Dort betraegt die lichte
+       Weite zwischen den Pads 159,0 mm -- der Hub eines RG6. Bei -0.628319
+       waren es 151,4 mm, bei q = 0 (dem frueheren "offen") nur 93,8 mm.
+       Die Grenze wird deshalb auf die Totlage gelegt, damit die volle Weite
+       ueberhaupt darstellbar ist; die geschlossene Seite bleibt, sie sitzt
+       bereits auf der Stellung mit Weite null.
+       Am husky-offboard-Container per TF und per check_state_validity
+       nachgemessen; die Gegenprobe an der echten Hand steht aus (R19). -->
   <xacro:macro name="finger_joint" params="prefix">
     <joint name="${prefix}finger_joint" type="revolute">
       <origin xyz="0 -0.024112 0.136813" rpy="0 0 0" />
       <parent link="${prefix}onrobot_rg6_base_link" />
       <child link="${prefix}left_outer_knuckle" />
       <axis xyz="-1 0 0" />
-      <limit lower="-0.628319" upper="0.628319" velocity="2.0" effort="1000" />
+      <limit lower="-0.937570" upper="0.628319" velocity="2.0" effort="1000" />
     </joint>
     <xacro:finger_joints prefix="${prefix}" fingerprefix="left" reflect="1.0"/>
   </xacro:macro>
@@ -146,7 +158,7 @@
       <parent link="${prefix}onrobot_rg6_base_link" />
       <child link="${prefix}right_outer_knuckle" />
       <axis xyz="1 0 0" />
-      <limit lower="-0.628319" upper="0.628319" velocity="2.0" effort="1000" />
+      <limit lower="-0.937570" upper="0.628319" velocity="2.0" effort="1000" />
       <mimic joint="${prefix}finger_joint" multiplier="-1" offset="0" />
     </joint>
     <xacro:finger_joints prefix="${prefix}" fingerprefix="right" reflect="-1.0"/>

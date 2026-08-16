@@ -376,10 +376,16 @@ def main():
                         help="Parent-Link des EE - MUSS ein Mitglied der parent_group "
                              "sein (default: arm_0_wrist_3_link; NICHT arm_0_tool0, da "
                              "tool0 kein Mitglied der joint-basierten arm_0-Gruppe ist)")
-    parser.add_argument("--angle-open", default="0.0",
-                        help="rg6_finger_joint-Winkel 'open' (default: 0.0)")
-    parser.add_argument("--angle-closed", default="0.6",
-                        help="rg6_finger_joint-Winkel 'close' (default: 0.6)")
+    # Aus der Getriebegeometrie (rg6_control/analog_model.hpp, namespace
+    # linkage), nicht geschaetzt: die frueheren 0.0 / 0.6 backten eine halb
+    # offene und eine nicht ganz geschlossene Hand als SRDF-Gruppenzustaende
+    # "open"/"close" ein.
+    parser.add_argument("--angle-open", default="-0.9375699",
+                        help="rg6_finger_joint-Winkel 'open' -- Kurbel-Totlage, "
+                             "groesste darstellbare Weite (default: -0.9375699)")
+    parser.add_argument("--angle-closed", default="0.6271264",
+                        help="rg6_finger_joint-Winkel 'close' -- lichte Weite "
+                             "null (default: 0.6271264)")
     parser.add_argument("--controller-name",
                         default="manipulators/rg6_gripper_controller",
                         help="MoveIt-Controllername (relativ zum move_group-Namespace)")

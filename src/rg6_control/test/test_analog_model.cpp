@@ -95,3 +95,97 @@ int main(int argc, char ** argv)
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+// --- Richtung 3: Weite <-> Fingergelenk, nach der GETRIEBEGEOMETRIE ----------
+//
+// Bis 2026-08-16 lief diese Abbildung linear zwischen zwei frei gesetzten
+// Ankern (`angle_open` 0.0, `angle_closed` 0.6).  Beide Anker waren falsch, und
+// zwar sichtbar: bei "ganz offen" standen die Backen 93,8 mm auseinander statt
+// 160 mm, bei "ganz zu" blieben 4,8 mm Spalt.  Der Greifer griff im
+// Planungsmodell in jedes Objekt hinein.
+//
+// Die wahre Beziehung folgt aus den Gelenkursprungen in
+// rg6_description/urdf/onrobot_rg6_model_macro.xacro:
+//
+//     Ursprungsabstand(q) = 2 * (a + L * cos(q + phi0))
+//
+// mit a = 0,024112 m (Basisversatz), L = 0,080 m (Kurbel), phi0 = 0,93757 rad,
+// und die lichte Weite ist der Ursprungsabstand minus 2 * 0,0246 m (Padflaeche
+// aus der Meshbox von inner_finger.stl).
+//
+// Am laufenden husky-offboard-Container am 2026-08-16 auf DREI unabhaengigen
+// Wegen belegt: Rechnung, TF zwischen den beiden inner_finger-Frames, und
+// move_groups eigene Kollisionspruefung (check_state_validity) gegen eine Box
+// wachsender Breite zwischen den Pads.
+
+namespace linkage = rg6_control::linkage;
+
+TEST(LinkageModel, TheClosedPoseSitsPracticallyOnTheJointsUpperLimit)
+{
+  // Die geschlossene Stellung (lichte Weite null) und die obere Gelenkgrenze
+  // der URDF liegen 1,2 mrad auseinander -- erkennbar dieselbe Absicht, aber
+  // nicht dieselbe Zahl.
+  // 1e-8 m, nicht enger: ``kClosedAngleRad`` ist ein siebenstelliges Literal
+  // (``std::acos`` ist nicht ``constexpr``), seine Rundung schlaegt mit
+  // wenigen Nanometern durch. Physikalisch ist das nichts.
+  EXPECT_NEAR(linkage::width_from_angle(linkage::kClosedAngleRad), 0.0, 1e-8);
+  EXPECT_NEAR(linkage::angle_from_width(0.0), linkage::kClosedAngleRad, 1e-6);
+  EXPECT_NEAR(linkage::width_from_angle(0.628319), 0.0, 5e-4);
+  // ...und bei q = 0,6, dem alten ``angle_closed``, blieben 4,8 mm Spalt --
+  // genau das, was der Owner in Foxglove als "nicht ganz zu" gesehen hat.
+  EXPECT_NEAR(linkage::width_from_angle(0.600000), 0.0048, 5e-4);
+}
+
+TEST(LinkageModel, TheOldOpenAnchorWasNotOpenAtAll)
+{
+  // q = 0 war `angle_open` und ist in Wahrheit die halb offene Hand.
+  EXPECT_NEAR(linkage::width_from_angle(0.0), 0.0938, 5e-4);
+}
+
+TEST(LinkageModel, TheJointsLowerLimitReachesAlmostTheFullStroke)
+{
+  EXPECT_NEAR(linkage::width_from_angle(-0.628319), 0.1514, 5e-4);
+  // ...und das geometrische Maximum liegt bei der Kurbel-Totlage.
+  EXPECT_NEAR(linkage::width_from_angle(-linkage::kCrankPhaseRad),
+              linkage::kMaxWidthM, 1e-6);
+  EXPECT_NEAR(linkage::kMaxWidthM, 0.1590, 5e-4);
+}
+
+TEST(LinkageModel, TheFourWidthsMeasuredInTheContainerMapToTheirJointValues)
+{
+  // Ursprungsabstaende per TF gemessen (143 / 112 / 80 / 54 mm), daraus die
+  // lichte Weite; hier die Umkehrung -- Weite -> Gelenkwert.
+  //
+  // Toleranz 6e-3 rad, und das ist die MESSUNG, nicht Nachsicht: tf2_echo
+  // gibt Millimeter aus, ein halber Millimeter Ableseunsicherheit in der
+  // Weite entspricht hier rund 0,004 rad. Enger zu pinnen hiesse, die
+  // eigene Rundung fuer eine Messung zu halten.
+  EXPECT_NEAR(linkage::angle_from_width(0.0938), 0.0, 6e-3);
+  EXPECT_NEAR(linkage::angle_from_width(0.0628), 0.225, 6e-3);
+  EXPECT_NEAR(linkage::angle_from_width(0.0308), 0.43125, 6e-3);
+  EXPECT_NEAR(linkage::angle_from_width(0.0048), 0.600, 6e-3);
+}
+
+TEST(LinkageModel, TheMappingRoundTrips)
+{
+  for (const double w : {0.0, 0.01, 0.05, 0.0938, 0.12, 0.1514, 0.159}) {
+    EXPECT_NEAR(linkage::width_from_angle(linkage::angle_from_width(w)), w, 1e-6)
+      << "Weite " << w << " m ueberlebt den Hin- und Rueckweg nicht";
+  }
+}
+
+TEST(LinkageModel, AWidthBeyondTheLinkageIsClampedInsteadOfProducingNaN)
+{
+  // Kommandiert werden 0..160 mm, das Getriebe gibt nur 159,0 mm her. Ohne
+  // Klemmung liefe acos() aus dem Definitionsbereich und die Gelenkwerte
+  // wuerden NaN -- der Greifer verschwaende dann aus dem Kollisionsmodell.
+  const double q = linkage::angle_from_width(0.160);
+  EXPECT_TRUE(std::isfinite(q));
+  EXPECT_NEAR(q, -linkage::kCrankPhaseRad, 1e-9);
+  // Und eine NEGATIVE Weite muss auf "ganz zu" klemmen. Sie liegt noch im
+  // Definitionsbereich des Kosinus, ergaebe also klaglos einen Gelenkwert
+  // jenseits der geschlossenen Stellung -- die Finger fuhren durcheinander
+  // hindurch, ohne NaN und ohne Warnung.
+  EXPECT_TRUE(std::isfinite(linkage::angle_from_width(-0.05)));
+  EXPECT_NEAR(linkage::angle_from_width(-0.05), linkage::kClosedAngleRad, 1e-6);
+}

@@ -76,8 +76,6 @@ public:
   {
     declare_parameter<double>("width_open_m", 0.160);
     declare_parameter<double>("width_closed_m", 0.0);
-    declare_parameter<double>("angle_open", 0.0);
-    declare_parameter<double>("angle_closed", 0.6);
     declare_parameter<double>("sim_speed_m_s", 0.16);       // voller Hub in ~1 s
     declare_parameter<double>("sim_object_width_m", 0.0);   // 0 = kein Objekt
     declare_parameter<double>("grip_default_force_n", 60.0);
@@ -211,12 +209,7 @@ private:
   {
     // Alle 6 Gelenke explizit (robot_state_publisher wertet <mimic> nicht aus;
     // Faktoren wie in rg6_joint_state_broadcaster).
-    const double t = map_clamped(
-      width_,
-      get_parameter("width_closed_m").as_double(),
-      get_parameter("width_open_m").as_double(),
-      get_parameter("angle_closed").as_double(),
-      get_parameter("angle_open").as_double());
+    const double t = rg6_control::linkage::angle_from_width(width_);
     const auto prefix = get_parameter("joint_prefix").as_string();
     sensor_msgs::msg::JointState msg;
     msg.header.stamp = get_clock()->now();
@@ -232,24 +225,20 @@ private:
     joint_pub_->publish(msg);
   }
 
-  double angle_from_width(double width_m) const
+  // Weite <-> Fingergelenk kommen seit 2026-08-16 aus der GETRIEBEGEOMETRIE
+  // (rg6_control/linkage), nicht mehr aus einer Geraden zwischen zwei frei
+  // gesetzten Ankern.  Die alten Anker (angle_open 0.0, angle_closed 0.6)
+  // trafen weder das offene noch das geschlossene Ende: "ganz offen" stand
+  // fuer 93,8 mm statt 160 mm, "ganz zu" liess 4,8 mm Spalt.  Begruendung und
+  // Messreihe stehen bei ``rg6_control::linkage``.
+  static double angle_from_width(double width_m)
   {
-    return map_clamped(
-      width_m,
-      get_parameter("width_closed_m").as_double(),
-      get_parameter("width_open_m").as_double(),
-      get_parameter("angle_closed").as_double(),
-      get_parameter("angle_open").as_double());
+    return rg6_control::linkage::angle_from_width(width_m);
   }
 
-  double width_from_angle(double angle) const
+  static double width_from_angle(double angle)
   {
-    return map_clamped(
-      angle,
-      get_parameter("angle_closed").as_double(),
-      get_parameter("angle_open").as_double(),
-      get_parameter("width_closed_m").as_double(),
-      get_parameter("width_open_m").as_double());
+    return rg6_control::linkage::width_from_angle(angle);
   }
 
   // Weite -> AI2-Spannung: der Weg, den nur der Sim geht.  Die Hardware misst

@@ -4,6 +4,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "ur_msgs/msg/tool_data_msg.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "rg6_control/analog_model.hpp"
 
 // Mappt tool_data.analog_input2 (Greiferweite) linear auf den Treiber-Gelenkwinkel
 // 'rg6_finger_joint' (Modell rg6_description) und publiziert ihn als
@@ -33,8 +34,11 @@ public:
     // Startwerte = grobe Schaetzung; bitte live nachjustieren (siehe oben).
     this->declare_parameter<double>("in_closed", 0.56);
     this->declare_parameter<double>("in_open", 10.0);
-    this->declare_parameter<double>("angle_closed", 0.6);
-    this->declare_parameter<double>("angle_open", 0.0);
+    // Aus der Getriebegeometrie, nicht geschaetzt -- siehe rg6_control::linkage.
+    this->declare_parameter<double>("angle_closed",
+      rg6_control::linkage::kClosedAngleRad);
+    this->declare_parameter<double>("angle_open",
+      -rg6_control::linkage::kCrankPhaseRad);
     // Totzonen-Schwelle: AI2 UNTER diesem Wert gilt als "kein gueltiges Feedback"
     // (der RG6 treibt die Analogleitung erst nach dem ersten Kommando; davor ~0 V).
     // Muss unter dem Zu-Wert in_closed liegen (0.56 V) und ueber der 0-V-Totlage.
@@ -145,10 +149,19 @@ private:
         analog_input);
     }
 
+    // Zwei Schritte, und die Trennung ist der Punkt: AI2 -> WEITE ist die
+    // (lineare) Kennlinie der Hardware, WEITE -> GELENK ist die Kinematik des
+    // Getriebes.  Bis 2026-08-16 lief beides in EINER Geraden zusammen, und
+    // die traf keines der beiden Enden: "ganz offen" stand fuer 93,8 mm statt
+    // 160 mm, "ganz zu" liess 4,8 mm Spalt.
     double pos = angle_closed;
     const double span_in = in_open - in_closed;
     if (std::abs(span_in) > 1e-9) {
-      pos = angle_closed + (analog_input - in_closed) * (angle_open - angle_closed) / span_in;
+      const double width_m = rg6_control::analog::width_from_raw(
+        analog_input, in_closed, in_open,
+        rg6_control::linkage::width_from_angle(angle_closed),
+        rg6_control::linkage::width_from_angle(angle_open));
+      pos = rg6_control::linkage::angle_from_width(width_m);
     }
 
     // Klemmen: ein unerwarteter analog_input2-Wert (falsche Einheit/Bereich) darf

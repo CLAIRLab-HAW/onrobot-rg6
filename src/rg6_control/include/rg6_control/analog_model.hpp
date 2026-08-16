@@ -78,4 +78,100 @@ inline double raw_from_width(
 
 }  // namespace rg6_control::analog
 
+// ---------------------------------------------------------------------------
+// Greifweite <-> rg6_finger_joint, nach der GETRIEBEGEOMETRIE.
+//
+// Bis zum 2026-08-16 lief diese Abbildung linear zwischen zwei frei gesetzten
+// Ankern (Parameter ``angle_open`` 0.0 und ``angle_closed`` 0.6).  Beide waren
+// falsch, und die Folge war im Planungsmodell sichtbar: bei "ganz offen"
+// standen die Backen 93,8 mm auseinander statt 160 mm, bei "ganz zu" blieben
+// 4,8 mm Spalt stehen.  Der Greifer griff also in jedes Objekt hinein, das
+// breiter als 94 mm war, und schloss nie ganz.  move_group prueft dieselbe
+// URDF -- die modellierte Hand war damit bei gleicher kommandierter Weite
+// SCHMALER als die echte, jede Freiraumpruefung um den Greifer herum also
+// optimistisch.
+//
+// Die wahre Beziehung folgt aus den Gelenkursprungen in
+// ``rg6_description/urdf/onrobot_rg6_model_macro.xacro``.  Das ``finger_joint``
+// sitzt bei y = -0,024112 auf der Basis, das ``inner_finger_joint`` bei
+// (y, z) = (-0,047335, +0,064495) auf dem ``outer_knuckle``; der
+// ``inner_finger`` selbst dreht per ``mimic`` mit +1 zurueck, bleibt also
+// parallel.  Damit ist der Abstand der beiden ``inner_finger``-Ursprunge
+//
+//     d(q) = 2 * (a + L * cos(q + phi0))
+//
+// mit a = 0,024112 m, L = |(0,047335, 0,064495)| = 0,080 m und
+// phi0 = atan2(0,064495, 0,047335) = 0,93757 rad.  Die lichte Weite zwischen
+// den Pads ist d(q) minus 2 * 0,0246 m (Padflaeche aus der Meshbox von
+// ``inner_finger.stl``).
+//
+// Am laufenden husky-offboard-Container am 2026-08-16 auf DREI unabhaengigen
+// Wegen belegt:
+//   1. die Rechnung oben;
+//   2. TF zwischen ``rg6_left_inner_finger`` und ``rg6_right_inner_finger``:
+//      143 / 112 / 80 / 54 mm bei kommandierten 160 / 100 / 45 / 0 mm;
+//   3. move_groups eigene ``check_state_validity`` gegen eine Box wachsender
+//      Breite zwischen den Pads: 92 / 60 / 28 / 4 mm lichte Weite.
+//
+// Warum das Getriebe trotzdem RG6 ist und nicht der Robotiq, dem die
+// Gelenknamen entstammen: die obere Gelenkgrenze (+0,628319) IST exakt die
+// geschlossene Stellung (0,0 mm), und das geometrische Maximum liegt bei
+// 159,0 mm -- also am RG6-Hub von 160 mm.  Falsch war nur, auf welchen
+// Ausschnitt dieses Wegs die Weite abgebildet wurde.
+namespace rg6_control::linkage
+{
+
+// Basisversatz des ``finger_joint`` in y [m] (URDF: 0,024112).
+inline constexpr double kBaseOffsetM = 0.024112;
+// Kurbellaenge [m]: |(0,047335, 0,064495)| aus dem ``inner_finger_joint``.
+inline constexpr double kCrankM = 0.0800005;
+// Anfangswinkel der Kurbel [rad]: atan2(0,064495, 0,047335).
+inline constexpr double kCrankPhaseRad = 0.9375699;
+// Wie weit die Padflaeche vom Ursprung ihres Links nach INNEN reicht [m]
+// (Meshbox von inner_finger.stl, lokal y_max = +0,0246).
+inline constexpr double kPadOffsetM = 0.0246;
+
+// Groesste lichte Weite, die das Getriebe hergibt [m] -- die Kurbel-Totlage
+// bei q = -kCrankPhaseRad.  Etwas UNTER dem nominellen RG6-Hub von 0,160 m;
+// eine breitere Weite ist mechanisch nicht darstellbar und wird geklemmt.
+inline constexpr double kMaxWidthM =
+  2.0 * (kBaseOffsetM + kCrankM - kPadOffsetM);
+
+// Gelenkwert der ganz geschlossenen Hand [rad]: acos((kPadOffsetM -
+// kBaseOffsetM) / kCrankM) - kCrankPhaseRad, also die Stellung mit lichter
+// Weite null.  Als Literal, weil ``std::acos`` nicht ``constexpr`` ist -- der
+// Test haelt es gegen ``angle_from_width(0.0)``.
+//
+// Die OBERE GELENKGRENZE der URDF (+0,628319) liegt 1,2 mrad dahinter; dort
+// ueberlappten sich die Pads rechnerisch um 0,19 mm.  Nah genug, dass die
+// Grenze erkennbar auf die geschlossene Stellung gelegt wurde -- aber es ist
+// nicht dieselbe Zahl, und die hier gebrauchte ist die geometrische.
+inline constexpr double kClosedAngleRad = 0.6271264;
+
+// Lichte Weite [m] beim Fingergelenk ``q`` [rad].
+inline double width_from_angle(double q)
+{
+  return 2.0 * (kBaseOffsetM + kCrankM * std::cos(q + kCrankPhaseRad)
+                - kPadOffsetM);
+}
+
+// Fingergelenk [rad] fuer die lichte Weite ``width_m``.  Die Umkehrung von
+// :func:`width_from_angle`, mit Klemmung auf den darstellbaren Bereich: ohne
+// sie liefe ``acos`` fuer die kommandierten 160 mm aus dem Definitionsbereich
+// und alle sechs Gelenkwerte wuerden NaN -- der Greifer verschwaende dann aus
+// dem Kollisionsmodell, statt bloss falsch dazustehen.
+// Geklemmt wird die WEITE, nicht erst das ``acos``-Argument. Eine negative
+// Weite liegt naemlich noch im Definitionsbereich des Kosinus und ergaebe
+// einen Gelenkwert JENSEITS der geschlossenen Stellung (fuer -50 mm etwa
+// 0,944 rad statt 0,628) -- die Finger fuhren dann durcheinander hindurch,
+// still und ohne NaN.
+inline double angle_from_width(double width_m)
+{
+  const double w = std::clamp(width_m, 0.0, kMaxWidthM);
+  const double cos_arg = (0.5 * w + kPadOffsetM - kBaseOffsetM) / kCrankM;
+  return std::acos(std::clamp(cos_arg, -1.0, 1.0)) - kCrankPhaseRad;
+}
+
+}  // namespace rg6_control::linkage
+
 #endif  // RG6_CONTROL__ANALOG_MODEL_HPP_

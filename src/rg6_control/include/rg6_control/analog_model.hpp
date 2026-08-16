@@ -84,8 +84,8 @@ inline double raw_from_width(
 // Bis zum 2026-08-16 lief diese Abbildung linear zwischen zwei frei gesetzten
 // Ankern (Parameter ``angle_open`` 0.0 und ``angle_closed`` 0.6).  Beide waren
 // falsch, und die Folge war im Planungsmodell sichtbar: bei "ganz offen"
-// standen die Backen 93,8 mm auseinander statt 160 mm, bei "ganz zu" blieben
-// 4,8 mm Spalt stehen.  Der Greifer griff also in jedes Objekt hinein, das
+// standen die Backen 93,7 mm auseinander statt 160 mm, bei "ganz zu" blieben
+// 4,3 mm Spalt stehen.  Der Greifer griff also in jedes Objekt hinein, das
 // breiter als 94 mm war, und schloss nie ganz.  move_group prueft dieselbe
 // URDF -- die modellierte Hand war damit bei gleicher kommandierter Weite
 // SCHMALER als die echte, jede Freiraumpruefung um den Greifer herum also
@@ -101,7 +101,7 @@ inline double raw_from_width(
 //     d(q) = 2 * (a + L * cos(q + phi0))
 //
 // mit a = 0,024112 m, L = |(0,047335, 0,064495)| = 0,080 m und
-// phi0 = atan2(0,064495, 0,047335) = 0,93757 rad.  Die lichte Weite zwischen
+// phi0 = atan2(0,064495, 0,047335) = 0,93766 rad.  Die lichte Weite zwischen
 // den Pads ist d(q) minus 2 * 0,0246 m (Padflaeche aus der Meshbox von
 // ``inner_finger.stl``).
 //
@@ -114,39 +114,55 @@ inline double raw_from_width(
 //      Breite zwischen den Pads: 92 / 60 / 28 / 4 mm lichte Weite.
 //
 // Warum das Getriebe trotzdem RG6 ist und nicht der Robotiq, dem die
-// Gelenknamen entstammen: die obere Gelenkgrenze (+0,628319) IST exakt die
-// geschlossene Stellung (0,0 mm), und das geometrische Maximum liegt bei
-// 159,0 mm -- also am RG6-Hub von 160 mm.  Falsch war nur, auf welchen
-// Ausschnitt dieses Wegs die Weite abgebildet wurde.
+// Gelenknamen entstammen: die obere Gelenkgrenze (+0,628319) faellt bis auf
+// 1,3 mrad mit der geschlossenen Stellung zusammen (dort -0,20 mm, also
+// gerade eben ueberlappend), und das geometrische Maximum liegt bei 159,0 mm
+// -- also am RG6-Hub von 160 mm.  Falsch war nur, auf welchen Ausschnitt
+// dieses Wegs die Weite abgebildet wurde.
 namespace rg6_control::linkage
 {
 
+// VIER abgelesene Zahlen, alles andere wird daraus gerechnet.  Diese Trennung
+// ist der Punkt: ein zusaetzliches Literal fuer Kurbel oder Phase ist eine
+// Zahl, die neben der Geometrie stehen kann, die sie beschreibt -- und genau
+// das ist beim ersten Anlauf dieses Fixes passiert (0.0800005 / 0.9375699,
+// 0,09 mrad daneben).  Dieselben vier Zahlen stehen im Roboterprofil
+// (robot_contract, gripper.linkage) und werden dort genauso ausgewertet.
+//
 // Basisversatz des ``finger_joint`` in y [m] (URDF: 0,024112).
 inline constexpr double kBaseOffsetM = 0.024112;
-// Kurbellaenge [m]: |(0,047335, 0,064495)| aus dem ``inner_finger_joint``.
-inline constexpr double kCrankM = 0.0800005;
-// Anfangswinkel der Kurbel [rad]: atan2(0,064495, 0,047335).
-inline constexpr double kCrankPhaseRad = 0.9375699;
+// Versatz des ``inner_finger_joint`` auf dem ``outer_knuckle`` [m]
+// (URDF: 0,071447-0,024112 bzw. 0,201308-0,136813).
+inline constexpr double kCrankYM = 0.047335;
+inline constexpr double kCrankZM = 0.064495;
 // Wie weit die Padflaeche vom Ursprung ihres Links nach INNEN reicht [m]
-// (Meshbox von inner_finger.stl, lokal y_max = +0,0246).
+// (Meshbox von inner_finger.stl, lokal y_max = +0,0246005).
 inline constexpr double kPadOffsetM = 0.0246;
+
+// Kurbellaenge [m] und Anfangswinkel [rad] -- gerechnet, nicht gepflegt.
+// ``inline const`` statt ``constexpr``, weil ``std::hypot``/``std::atan2``
+// nicht ``constexpr`` sind; benutzt werden sie nur zur Laufzeit.
+inline const double kCrankM = std::hypot(kCrankYM, kCrankZM);
+inline const double kCrankPhaseRad = std::atan2(kCrankZM, kCrankYM);
 
 // Groesste lichte Weite, die das Getriebe hergibt [m] -- die Kurbel-Totlage
 // bei q = -kCrankPhaseRad.  Etwas UNTER dem nominellen RG6-Hub von 0,160 m;
 // eine breitere Weite ist mechanisch nicht darstellbar und wird geklemmt.
-inline constexpr double kMaxWidthM =
+inline const double kMaxWidthM =
   2.0 * (kBaseOffsetM + kCrankM - kPadOffsetM);
 
-// Gelenkwert der ganz geschlossenen Hand [rad]: acos((kPadOffsetM -
-// kBaseOffsetM) / kCrankM) - kCrankPhaseRad, also die Stellung mit lichter
-// Weite null.  Als Literal, weil ``std::acos`` nicht ``constexpr`` ist -- der
-// Test haelt es gegen ``angle_from_width(0.0)``.
+// Gelenkwert der ganz geschlossenen Hand [rad] -- die Stellung mit lichter
+// Weite null.
 //
-// Die OBERE GELENKGRENZE der URDF (+0,628319) liegt 1,2 mrad dahinter; dort
-// ueberlappten sich die Pads rechnerisch um 0,19 mm.  Nah genug, dass die
+// Die OBERE GELENKGRENZE der URDF (+0,628319) liegt 1,3 mrad dahinter; dort
+// ueberlappen sich die Pads rechnerisch um 0,20 mm.  Nah genug, dass die
 // Grenze erkennbar auf die geschlossene Stellung gelegt wurde -- aber es ist
-// nicht dieselbe Zahl, und die hier gebrauchte ist die geometrische.
-inline constexpr double kClosedAngleRad = 0.6271264;
+// nicht dieselbe Zahl, und die hier gebrauchte ist die geometrische.  Die
+// Grenze bleibt, wo sie ist: sie gibt dem Regler etwas Weg hinter dem Ziel,
+// und 0,2 mm Ueberlapp sind weniger als das Umkehrspiel des Geraets
+// (0,1..0,3 mm laut Handbuch v6.6.2, Abschnitt 8.1.4).
+inline const double kClosedAngleRad =
+  std::acos((kPadOffsetM - kBaseOffsetM) / kCrankM) - kCrankPhaseRad;
 
 // Lichte Weite [m] beim Fingergelenk ``q`` [rad].
 inline double width_from_angle(double q)

@@ -152,8 +152,8 @@ private:
     // Zwei Schritte, und die Trennung ist der Punkt: AI2 -> WEITE ist die
     // (lineare) Kennlinie der Hardware, WEITE -> GELENK ist die Kinematik des
     // Getriebes.  Bis 2026-08-16 lief beides in EINER Geraden zusammen, und
-    // die traf keines der beiden Enden: "ganz offen" stand fuer 93,8 mm statt
-    // 160 mm, "ganz zu" liess 4,8 mm Spalt.
+    // die traf keines der beiden Enden: "ganz offen" stand fuer 93,7 mm statt
+    // 160 mm, "ganz zu" liess 4,3 mm Spalt.
     double pos = angle_closed;
     const double span_in = in_open - in_closed;
     if (std::abs(span_in) > 1e-9) {

@@ -35,11 +35,13 @@
     # analog_model.hpp): angle_open ist die Kurbel-Totlage (groesste
     # darstellbare Weite, 159,0 mm), angle_closed die Stellung mit lichter
     # Weite null.  Die frueheren 0.0 / 0.6 trafen keines der beiden Enden --
-    # bei 0.0 stehen die Backen 93,8 mm auseinander statt 160 mm, bei 0.6
-    # bleiben 4,8 mm Spalt.  Am husky-offboard-Container am 2026-08-16 auf
+    # bei 0.0 stehen die Backen 93,7 mm auseinander statt 160 mm, bei 0.6
+    # bleiben 4,3 mm Spalt.  Am husky-offboard-Container am 2026-08-16 auf
     # drei Wegen nachgemessen (Rechnung, TF, check_state_validity).
-    angle_open: -0.9375699
-    angle_closed: 0.6271264
+    # Dieselben Zahlen fuehrt das Roboterprofil (robot_contract,
+    # gripper.linkage), dort ebenfalls aus der Geometrie abgeleitet.
+    angle_open: -0.9376577
+    angle_closed: 0.6270387
 
     # --- Bewegungs-/Settle-Erkennung (Fallback ohne io_states) ---
     force_threshold: 3.1         # [V] AI3

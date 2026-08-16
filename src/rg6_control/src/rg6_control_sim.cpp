@@ -229,7 +229,7 @@ private:
   // (rg6_control/linkage), nicht mehr aus einer Geraden zwischen zwei frei
   // gesetzten Ankern.  Die alten Anker (angle_open 0.0, angle_closed 0.6)
   // trafen weder das offene noch das geschlossene Ende: "ganz offen" stand
-  // fuer 93,8 mm statt 160 mm, "ganz zu" liess 4,8 mm Spalt.  Begruendung und
+  // fuer 93,7 mm statt 160 mm, "ganz zu" liess 4,3 mm Spalt.  Begruendung und
   // Messreihe stehen bei ``rg6_control::linkage``.
   static double angle_from_width(double width_m)
   {

@@ -256,8 +256,8 @@ private:
     //
     // Die Werte kommen seit 2026-08-16 aus der GETRIEBEGEOMETRIE
     // (rg6_control::linkage), nicht mehr aus einer Schaetzung. Die alten
-    // (0.0 / 0.6) trafen weder Ende: bei 0.0 stehen die Backen 93,8 mm
-    // auseinander (nicht 160 mm), bei 0.6 bleiben 4,8 mm Spalt. Sie werden
+    // (0.0 / 0.6) trafen weder Ende: bei 0.0 stehen die Backen 93,7 mm
+    // auseinander (nicht 160 mm), bei 0.6 bleiben 4,3 mm Spalt. Sie werden
     // hier NUR noch als Endpunkt-Anker benutzt (Endlagen-Erkennung), das
     // Umrechnen macht die Kinematik selbst.
     declare_parameter<double>("angle_open", -rg6_control::linkage::kCrankPhaseRad);

@@ -100,8 +100,8 @@ int main(int argc, char ** argv)
 //
 // Bis 2026-08-16 lief diese Abbildung linear zwischen zwei frei gesetzten
 // Ankern (`angle_open` 0.0, `angle_closed` 0.6).  Beide Anker waren falsch, und
-// zwar sichtbar: bei "ganz offen" standen die Backen 93,8 mm auseinander statt
-// 160 mm, bei "ganz zu" blieben 4,8 mm Spalt.  Der Greifer griff im
+// zwar sichtbar: bei "ganz offen" standen die Backen 93,7 mm auseinander statt
+// 160 mm, bei "ganz zu" blieben 4,3 mm Spalt.  Der Greifer griff im
 // Planungsmodell in jedes Objekt hinein.
 //
 // Die wahre Beziehung folgt aus den Gelenkursprungen in
@@ -109,7 +109,7 @@ int main(int argc, char ** argv)
 //
 //     Ursprungsabstand(q) = 2 * (a + L * cos(q + phi0))
 //
-// mit a = 0,024112 m (Basisversatz), L = 0,080 m (Kurbel), phi0 = 0,93757 rad,
+// mit a = 0,024112 m (Basisversatz), L = 0,080 m (Kurbel), phi0 = 0,93766 rad,
 // und die lichte Weite ist der Ursprungsabstand minus 2 * 0,0246 m (Padflaeche
 // aus der Meshbox von inner_finger.stl).
 //
@@ -120,26 +120,40 @@ int main(int argc, char ** argv)
 
 namespace linkage = rg6_control::linkage;
 
+TEST(LinkageModel, TheCrankIsDerivedFromTheTwoUrdfOffsetsAndNotMaintained)
+{
+  // Kurbel und Phase sind gerechnet, nicht gepflegt.  Der erste Anlauf dieses
+  // Fixes trug sie als eigene Literale (0.0800005 / 0.9375699) und lag damit
+  // 0,09 mrad neben der Geometrie, die sie beschreiben sollten -- klein, aber
+  // genau die Art Drift, gegen die der ganze Umbau da ist.  Dieselben vier
+  // abgelesenen Zahlen fuehrt das Roboterprofil (robot_contract,
+  // gripper.linkage); driften duerfen sie nicht.
+  EXPECT_NEAR(linkage::kCrankM, std::hypot(0.047335, 0.064495), 1e-12);
+  EXPECT_NEAR(linkage::kCrankPhaseRad, std::atan2(0.064495, 0.047335), 1e-12);
+  EXPECT_NEAR(linkage::kCrankM, 0.0800013, 1e-7);
+  EXPECT_NEAR(linkage::kCrankPhaseRad, 0.9376577, 1e-7);
+}
+
 TEST(LinkageModel, TheClosedPoseSitsPracticallyOnTheJointsUpperLimit)
 {
   // Die geschlossene Stellung (lichte Weite null) und die obere Gelenkgrenze
-  // der URDF liegen 1,2 mrad auseinander -- erkennbar dieselbe Absicht, aber
-  // nicht dieselbe Zahl.
-  // 1e-8 m, nicht enger: ``kClosedAngleRad`` ist ein siebenstelliges Literal
-  // (``std::acos`` ist nicht ``constexpr``), seine Rundung schlaegt mit
-  // wenigen Nanometern durch. Physikalisch ist das nichts.
-  EXPECT_NEAR(linkage::width_from_angle(linkage::kClosedAngleRad), 0.0, 1e-8);
-  EXPECT_NEAR(linkage::angle_from_width(0.0), linkage::kClosedAngleRad, 1e-6);
-  EXPECT_NEAR(linkage::width_from_angle(0.628319), 0.0, 5e-4);
-  // ...und bei q = 0,6, dem alten ``angle_closed``, blieben 4,8 mm Spalt --
+  // der URDF liegen 1,3 mrad auseinander -- erkennbar dieselbe Absicht, aber
+  // nicht dieselbe Zahl.  Die Grenze bleibt die groessere: 0,20 mm Ueberlapp
+  // sind weniger als das Umkehrspiel des Geraets (0,1..0,3 mm laut Handbuch
+  // v6.6.2, Abschnitt 8.1.4), und der Regler bekommt Weg hinter dem Ziel.
+  EXPECT_NEAR(linkage::width_from_angle(linkage::kClosedAngleRad), 0.0, 1e-12);
+  EXPECT_NEAR(linkage::angle_from_width(0.0), linkage::kClosedAngleRad, 1e-9);
+  EXPECT_NEAR(linkage::kClosedAngleRad, 0.6270387, 1e-7);
+  EXPECT_NEAR(linkage::width_from_angle(0.628319), -0.0002, 1e-4);
+  // ...und bei q = 0,6, dem alten ``angle_closed``, blieben 4,3 mm Spalt --
   // genau das, was der Owner in Foxglove als "nicht ganz zu" gesehen hat.
-  EXPECT_NEAR(linkage::width_from_angle(0.600000), 0.0048, 5e-4);
+  EXPECT_NEAR(linkage::width_from_angle(0.600000), 0.0043, 5e-4);
 }
 
 TEST(LinkageModel, TheOldOpenAnchorWasNotOpenAtAll)
 {
   // q = 0 war `angle_open` und ist in Wahrheit die halb offene Hand.
-  EXPECT_NEAR(linkage::width_from_angle(0.0), 0.0938, 5e-4);
+  EXPECT_NEAR(linkage::width_from_angle(0.0), 0.0937, 5e-4);
 }
 
 TEST(LinkageModel, TheJointsLowerLimitReachesAlmostTheFullStroke)
@@ -160,15 +174,15 @@ TEST(LinkageModel, TheFourWidthsMeasuredInTheContainerMapToTheirJointValues)
   // gibt Millimeter aus, ein halber Millimeter Ableseunsicherheit in der
   // Weite entspricht hier rund 0,004 rad. Enger zu pinnen hiesse, die
   // eigene Rundung fuer eine Messung zu halten.
-  EXPECT_NEAR(linkage::angle_from_width(0.0938), 0.0, 6e-3);
-  EXPECT_NEAR(linkage::angle_from_width(0.0628), 0.225, 6e-3);
-  EXPECT_NEAR(linkage::angle_from_width(0.0308), 0.43125, 6e-3);
-  EXPECT_NEAR(linkage::angle_from_width(0.0048), 0.600, 6e-3);
+  EXPECT_NEAR(linkage::angle_from_width(0.0937), 0.0, 6e-3);
+  EXPECT_NEAR(linkage::angle_from_width(0.0625), 0.225, 6e-3);
+  EXPECT_NEAR(linkage::angle_from_width(0.0311), 0.43125, 6e-3);
+  EXPECT_NEAR(linkage::angle_from_width(0.0043), 0.600, 6e-3);
 }
 
 TEST(LinkageModel, TheMappingRoundTrips)
 {
-  for (const double w : {0.0, 0.01, 0.05, 0.0938, 0.12, 0.1514, 0.159}) {
+  for (const double w : {0.0, 0.01, 0.05, 0.0937, 0.12, 0.1514, 0.159}) {
     EXPECT_NEAR(linkage::width_from_angle(linkage::angle_from_width(w)), w, 1e-6)
       << "Weite " << w << " m ueberlebt den Hin- und Rueckweg nicht";
   }

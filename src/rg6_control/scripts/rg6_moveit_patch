@@ -380,12 +380,12 @@ def main():
     # linkage), nicht geschaetzt: die frueheren 0.0 / 0.6 backten eine halb
     # offene und eine nicht ganz geschlossene Hand als SRDF-Gruppenzustaende
     # "open"/"close" ein.
-    parser.add_argument("--angle-open", default="-0.9375699",
+    parser.add_argument("--angle-open", default="-0.9376577",
                         help="rg6_finger_joint-Winkel 'open' -- Kurbel-Totlage, "
-                             "groesste darstellbare Weite (default: -0.9375699)")
-    parser.add_argument("--angle-closed", default="0.6271264",
+                             "groesste darstellbare Weite (default: -0.9376577)")
+    parser.add_argument("--angle-closed", default="0.6270387",
                         help="rg6_finger_joint-Winkel 'close' -- lichte Weite "
-                             "null (default: 0.6271264)")
+                             "null (default: 0.6270387)")
     parser.add_argument("--controller-name",
                         default="manipulators/rg6_gripper_controller",
                         help="MoveIt-Controllername (relativ zum move_group-Namespace)")

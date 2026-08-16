@@ -2,9 +2,29 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
   <xacro:macro name="onrobot_rg6_base_link" params="prefix">
     <link name="${prefix}onrobot_rg6_base_link">
+      <!-- MASSE UND SCHWERPUNKT nach Datenblatt (OnRobot RG6,
+           Bedienungsanleitung v6.6.2 DE, Abschnitt 8.3.2: 1,25 kg,
+           Schwerpunkt cZ = 90 mm vom Werkzeug-Basispunkt).
+
+           Vorher wog das Modell 1,00 kg: 0,7 kg hier plus 6 x 0,05 kg auf den
+           Fingergliedern - 250 g zu leicht, und der Schwerpunkt sass im
+           Ursprung statt 90 mm darueber.  Die 0,95 kg hier sind der Rest, der
+           mit den sechs Fingergliedern zusammen die 1,25 kg des Datenblatts
+           ergibt; die 0,0669 m sind so gewaehlt, dass der Schwerpunkt der
+           GANZEN Baugruppe bei halbem Hub auf den 90 mm des Datenblatts
+           landet.  Ueber den vollen Hub wandert er zwischen 85,5 und 91,9 mm,
+           weil die Finger beim Schliessen nach vorn schwingen - das
+           Datenblatt gibt nur eine Zahl, also ist die Mittelstellung der
+           ehrlichste Bezugspunkt.
+
+           Der Traegheitstensor bleibt der Platzhalter, der er war (fuer eine
+           0,05-kg-Backe und ein 0,95-kg-Gehaeuse derselbe Wert - das kann
+           nicht stimmen).  Fuer MoveIt ist er ohne Bedeutung, fuer MuJoCo
+           waere er es nicht; ihn zu vermessen ist eigene Arbeit und nicht
+           Teil dieses Fixes. -->
       <inertial>
-        <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
-        <mass value="0.7" />
+        <origin xyz="0.0 0.0 0.0669" rpy="0 0 0" />
+        <mass value="0.95" />
         <inertia ixx="1.0E-03" ixy="1.0E-06" ixz="1.0E-06" iyy="1.0E-03" iyz="1.0E-06" izz="1.0E-03" />
       </inertial>
       <visual>

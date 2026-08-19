@@ -6,21 +6,24 @@ die Einbettung in den Onboard-Stack in
 
 ## 2026-08-19
 
-- **Der Quick Changer sitzt wieder zwischen Flansch und Greifer.**
-  `rg6_tool0_to_base` stand auf `xyz="0 0 0"` — der ganze Greifer hing damit
-  19,6 mm zu hoch am Arm, und mit ihm sein TCP. Der Wert ist die Roboterseite
-  des Quick Changers für I/O (QC-Datenblatt v2.0); die Werkzeugseite steckt
-  schon im Mesh (unterste 20 mm von `base_link.stl`, Ø 71 mm). Der Owner hat
-  nachgesehen: zwischen Flansch und Greifer liegt nichts ausser einem
-  0,4-mm-Ring, der zum UR-Flansch gehört. Durch `xacro` verifiziert:
-  `arm_0_tool0 → rg6_hand_tcp` ist jetzt 229,6 mm statt 210,0.
-  **Zweitbeleg aus fremder Quelle:** im MIT-lizenzierten Modell
-  `onrobot_description` (rg6_v2, INRIA) reicht `body.stl` 19 mm unter seinen
-  eigenen Ursprung mit Ø 69,5 mm — dieselbe Scheibe, derselbe Bezugspunkt.
-  **Achtung:** `hrl` greift damit 19,6 mm zu hoch, bis der kalibrierte
-  `descend_offset` (0,065 gegen 0,045 in der Sim — ein Aufschlag von 20,0 mm,
-  der genau diesen Fehler bezahlt hat) zurückgenommen ist. Siehe ROBOTER-TODO
-  **R23**; die Rücknahme braucht einen Griff am Gerät.
+- **Das vermessene RG6-Modell ist einvendort** (`onrobot_description`, rg6_v2,
+  MIT, INRIA — Herkunft in [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)):
+  sieben visuelle Meshes plus eigene Kollisionsmeshes, Ursprünge und Grenzen
+  als Daten in `config/rg6_v2.yaml` statt fest im Xacro. Der Treibergelenkname
+  ist parametrisiert, damit `rg6_finger_joint` bleibt, was es ist. Gegenüber
+  Upstream entfernt: der `<ros2_control>`-Block und der Gazebo-Aufruf — der
+  Greifer hängt an diesem Roboter nicht am `controller_manager`, sondern an
+  der XML-RPC-Brücke. Verdrahtet ist es noch nicht; das Modell im Betrieb ist
+  weiterhin das alte.
+- **Die Bracket-Geometrie des neuen Modells stimmt an der Hardware:** der
+  Owner hat 81 mm Bracket-Höhe und ~41 mm Einstecktiefe des Greiferkörpers
+  gemessen, das Mesh sagt 81,1 und 41,5 mm.
+- **Ein Irrtum desselben Tages, am selben Tag zurückgenommen:** zwischenzeitlich
+  stand `rg6_tool0_to_base` auf `xyz="0 0 0.0196"` — 19,6 mm für eine
+  Quick-Changer-Roboterseite, die ROBOTER-TODO R20 aus dem Datenblatt
+  erschlossen hatte. Am Gerät nachgesehen sitzt das Bracket **unmittelbar auf
+  dem UR-Flansch**; sein Fuss ist selbst die Kopplungsfläche (Ø 71 mm, an
+  beiden Modellen am Mesh nachgemessen). Der Wert steht wieder auf `0 0 0`.
 
 ## 2026-08-13
 

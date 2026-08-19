@@ -12,7 +12,6 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(ur_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(control_msgs REQUIRED)
 find_package(rg6_msgs REQUIRED)
@@ -28,13 +27,15 @@ add_executable(joint_state_relay src/joint_state_relay.cpp)
 target_include_directories(rg6_control_sim PRIVATE include)
 
 
-# Sim-Node: gleiche ROS-Schnittstelle wie rg6_control, aber ohne UR-Hardware
-# (publiziert joint_states selbst; kein ur_msgs noetig).
+# Sim-Node: dieselbe ROS-Oberflaeche, die der Greifer am Roboter hat --
+# GripperCommand-Action, Treibergelenk auf joint_states und rg6/bridge_state --
+# nur ohne Hardware.  ur_msgs ist mit dem Realtreiber weggefallen.
 target_link_libraries(rg6_control_sim
   rclcpp::rclcpp
   rclcpp_action::rclcpp_action
   std_srvs::std_srvs__rosidl_typesupport_cpp
   ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
   ${control_msgs_TARGETS}
   ${rg6_msgs_TARGETS}
 )

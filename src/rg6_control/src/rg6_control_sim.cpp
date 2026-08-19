@@ -5,7 +5,11 @@
 //            rg6_control/grip (rg6_msgs/Grip),
 //            rg6_control/set_force_preset, rg6_control/set_tool_power (SetBool)
 //   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
-//   Topic    rg6/state (rg6_msgs/GripperState)
+//   Topic    rg6/bridge_state (std_msgs/String, flaches JSON) -- DERSELBE
+//            Name und dasselbe JSON wie rg6_grip_bridge am echten Roboter
+//   Topic    rg6/state (rg6_msgs/GripperState) -- der alte Kanal, nur noch
+//            fuer Betrachter, die ihn schon abonnieren; der plan_server liest
+//            seit 2026-08-19 bridge_state
 // und publiziert zusaetzlich das Treibergelenk als joint_states (ersetzt den
 // frueheren rg6_joint_state_broadcaster_sim) -> Modell animiert in RViz/Foxglove,
 // MoveIt-Integration ist damit komplett ohne Roboter testbar.  Die fuenf
@@ -44,6 +48,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -57,6 +62,7 @@
 #include "rg6_msgs/msg/gripper_state.hpp"
 #include "rg6_msgs/srv/grip.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
@@ -103,6 +109,12 @@ public:
     blocking_cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 
     state_pub_ = create_publisher<rg6_msgs::msg::GripperState>("rg6/state", rclcpp::QoS(10));
+    // Derselbe Zustand als flaches JSON, unter dem Namen, den auch
+    // rg6_grip_bridge am Roboter benutzt.  Ohne ihn liest der plan_server im
+    // Container ins Leere -- genau der Fehler, der auf 'real' seit dem
+    // rg6_control-Ruhestand bestand und am 2026-08-19 aufgefallen ist.
+    bridge_state_pub_ = create_publisher<std_msgs::msg::String>(
+      "rg6/bridge_state", rclcpp::QoS(10));
     // 'joint_states' relativ -> per Launch-Remap auf das gewuenschte Topic legen
     // (a200-0553: manipulators/endeffectors/joint_states).
     joint_pub_ = create_publisher<sensor_msgs::msg::JointState>("joint_states", rclcpp::QoS(10));
@@ -453,6 +465,36 @@ private:
     msg.high_force_preset = high_force_preset_;
     msg.last_command = last_command_;
     state_pub_->publish(msg);
+    publish_bridge_state_locked();
+  }
+
+  // Die Felder von rg6_grip_bridge.status_payload(), Zeichen fuer Zeichen --
+  // wer hier etwas umbenennt, macht den Container zum Sonderfall.
+  //
+  // "status" und "safety_failed" kommen am Geraet aus rg_get_status /
+  // rg_get_safety_failed.  Der Sim hat keine Stoerung zu melden und schreibt
+  // deshalb 0 / false; das ist keine Behauptung ueber Hardware, sondern die
+  // ehrliche Aussage "in dieser Simulation gibt es nichts zu stoeren".
+  void publish_bridge_state_locked()
+  {
+    const char * cmd = "NONE";
+    switch (last_command_) {
+      case rg6_msgs::msg::GripperState::COMMAND_OPEN: cmd = "OPEN"; break;
+      case rg6_msgs::msg::GripperState::COMMAND_CLOSE: cmd = "CLOSE"; break;
+      case rg6_msgs::msg::GripperState::COMMAND_GRIP: cmd = "GRIP"; break;
+      default: cmd = "NONE"; break;
+    }
+    std::ostringstream os;
+    os << std::fixed << std::setprecision(6)
+       << "{\"width_m\": " << width_
+       << ", \"busy\": " << (moving_ ? "true" : "false")
+       << ", \"grip_detected\": " << (grip_detected_ ? "true" : "false")
+       << ", \"status\": 0"
+       << ", \"safety_failed\": false"
+       << ", \"last_command\": \"" << cmd << "\"}";
+    std_msgs::msg::String out;
+    out.data = os.str();
+    bridge_state_pub_->publish(out);
   }
 
   rclcpp::CallbackGroup::SharedPtr blocking_cb_group_;
@@ -461,6 +503,7 @@ private:
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr force_preset_service_, tool_power_service_;
   rclcpp_action::Server<GripperCommand>::SharedPtr action_server_;
   rclcpp::Publisher<rg6_msgs::msg::GripperState>::SharedPtr state_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr bridge_state_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_pub_;
   rclcpp::TimerBase::SharedPtr tick_timer_, state_timer_;
 

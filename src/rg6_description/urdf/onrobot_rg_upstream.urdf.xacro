@@ -10,8 +10,16 @@
 
   <!-- onrobot gripper -->
   <xacro:macro name="onrobot_rg" params="parent *origin prefix:=''
-    model:='rg2_v1' safety_shield:=False bracket:='single_bracket' mount_angle:=0.0 standalone:=false real_hardware:=false">
+    model:='rg2_v1' safety_shield:=False bracket:='single_bracket' mount_angle:=0.0 standalone:=false real_hardware:=false
+    driver_joint:=''">
     <xacro:property name="gripper_name" value="${prefix}gripper"/>
+    <!-- Name des Treibergelenks.  Upstream heisst es "<prefix>gripper_joint";
+         dieser Workspace kennt seit jeher "rg6_finger_joint", und der Name
+         steht in /joint_states, im Profil, im SRDF-Patch, in der
+         Greiferbruecke und in den MuJoCo-Szenen.  Ein Parameter hier spart
+         eine Umbenennung auf dem Draht.  Leer = Upstream-Voreinstellung. -->
+    <xacro:property name="driver"
+                    value="${driver_joint if driver_joint else gripper_name + '_joint'}"/>
     <!-- load config from file -->
     <xacro:property name="config_file" value="$(find rg6_description)/config/${model}.yaml"/>
     <xacro:property name="config" value="${xacro.load_yaml(config_file)}"/>
@@ -123,7 +131,7 @@
         <xacro:_inertial id="moment_arm"/>
       </link>
 
-      <joint name="${gripper_name + ('' if is_master else '_mirror')}_joint" type="revolute">
+      <joint name="${driver if is_master else driver + '_mirror'}" type="revolute">
         <parent link="${name}_origin"/>
         <child link = "${name}_moment_arm"/>
         <axis xyz="0 1 0"/>
@@ -131,7 +139,7 @@
         <xacro:_limit/>
         <dynamics damping="0.17"/>
         <xacro:unless value="${is_master}">
-          <mimic joint="${gripper_name}_joint" multiplier="1" offset="0"/>
+          <mimic joint="${driver}" multiplier="1" offset="0"/>
         </xacro:unless>
       </joint>
 
@@ -157,7 +165,7 @@
         <axis xyz="0 1 0"/>
         <xacro:_frame id="truss_arm" rpy="0.0 ${offset} 0.0"/>
         <xacro:_limit/>
-        <mimic joint="${gripper_name}_joint" multiplier="1" offset="0"/>
+        <mimic joint="${driver}" multiplier="1" offset="0"/>
       </joint>
 
       <!-- safety shield -->
@@ -184,7 +192,7 @@
           <axis xyz="0 1 0"/>
           <xacro:_frame id="safety_shield" rpy="0.0 ${offset} 0.0"/>
           <xacro:_limit/>
-          <mimic joint="${gripper_name}_joint" multiplier="1" offset="0"/>
+          <mimic joint="${driver}" multiplier="1" offset="0"/>
         </joint>
       </xacro:if>
 
@@ -215,7 +223,7 @@
         <axis xyz="0 -1 0"/>
         <xacro:_frame id="finger_tip" rpy="0.0 ${-offset} 0.0"/>
         <xacro:_limit/>
-        <mimic joint="${gripper_name}_joint" multiplier="1" offset="0"/>
+        <mimic joint="${driver}" multiplier="1" offset="0"/>
       </joint>
 
       <!-- flex finger -->

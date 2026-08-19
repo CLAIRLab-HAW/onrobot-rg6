@@ -6,21 +6,6 @@
 //   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
 //   Topic    rg6/bridge_state + das Treibergelenk auf joint_states
 //
-// ALTLAST, ohne Verbraucher: die Services rg6_control/{open,close,grip,
-// set_force_preset,set_tool_power} und das Topic rg6/state.  Sie gehoerten
-// zum geloeschten Tool-DO-Treiber; am Roboter gibt es sie nicht mehr, und
-// seit husky_sdk auf die Action umgestellt ist, ruft sie niemand.  Sie stehen
-// hier nur noch, weil ihr Ausbau eigene Arbeit ist -- NICHT, weil der Mock
-// damit "dieselbe Oberflaeche wie der echte Treiber" haette.  Wer sie als
-// Vorlage fuer echten Code nimmt, baut gegen etwas, das es nicht gibt.
-//   Services rg6_control/{open,close} (Trigger),
-//            rg6_control/grip (rg6_msgs/Grip),
-//            rg6_control/set_force_preset, rg6_control/set_tool_power (SetBool)
-//   Topic    rg6/bridge_state (std_msgs/String, flaches JSON) -- DERSELBE
-//            Name und dasselbe JSON wie rg6_grip_bridge am echten Roboter
-//   Topic    rg6/state (rg6_msgs/GripperState) -- der alte Kanal, nur noch
-//            fuer Betrachter, die ihn schon abonnieren; der plan_server liest
-//            seit 2026-08-19 bridge_state
 // und publiziert zusaetzlich das Treibergelenk als joint_states (ersetzt den
 // frueheren rg6_joint_state_broadcaster_sim) -> Modell animiert in RViz/Foxglove,
 // MoveIt-Integration ist damit komplett ohne Roboter testbar.  Die fuenf
@@ -31,19 +16,13 @@
 // Mit sim_object_width_m > 0 stoppt das Schliessen an der Objektweite ->
 // grip_detected=true (wie das Tool-DI0-Signal der echten Hardware).
 //
-// Analoger Rueckkanal: width_raw traegt an der Hardware die AI2-Spannung des
-// Tool-Anschlusses, aus der der Realtreiber die Weite ueberhaupt erst gewinnt.
-// Der Sim rechnet sie aus seiner Weite zurueck (analog_model.hpp) statt NaN zu
-// melden -- sonst widerspricht er sich selbst: er setzt tool_data_received=true,
-// behauptet also, die Tool-Daten seien da, und liefert dann keine.  Der
-// Verfuegbarkeits-Guard der plan-bridge liest genau dieses Feld und feuerte
-// darum im Container bei JEDEM Greifer-Kommando, obwohl der Sim die Ziele
-// korrekt anfuhr.  Ein Guard, der immer feuert, ist Rauschen.
-//
-// force_raw bleibt bewusst NaN: das ist der Motorstrom (AI3), fuer den es hier
-// kein ehrliches Modell gibt -- die Kraft haengt an Backengeometrie, Objekt und
-// Preset.  Kein Verbraucher liest ihn; erfundene Zahlen waeren schlechter als
-// ein offenes "nicht gemessen".
+// AM 2026-08-19 ZURUECKGESCHNITTEN: die Services rg6_control/{open,close,grip,
+// set_force_preset,set_tool_power}, das Topic rg6/state (rg6_msgs/GripperState)
+// und das AI2-Modell sind ENTFALLEN.  Sie gehoerten zum geloeschten
+// Tool-DO-Treiber; am Roboter gibt es sie nicht mehr, und seit husky_sdk auf
+// die Action umgestellt ist, ruft sie niemand.  Ein Mock, der eine Oberflaeche
+// nachbildet, die es nirgends gibt, ist eine Vorlage fuer Code gegen etwas,
+// das nicht existiert.
 //
 // Grenze: das macht den Greifer im Container benutzbar, mehr nicht.  Die echten
 // RG6-Pathologien bleiben unabgedeckt (AI2 haengt bei zuen Backen auf 10 V, ein
@@ -68,14 +47,9 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 
 #include "control_msgs/action/gripper_command.hpp"
-#include "rg6_control/analog_model.hpp"
 #include "rg6_control/finger_kinematics.hpp"
-#include "rg6_msgs/msg/gripper_state.hpp"
-#include "rg6_msgs/srv/grip.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "std_srvs/srv/set_bool.hpp"
-#include "std_srvs/srv/trigger.hpp"
 
 using namespace std::chrono_literals;
 using GripperCommand = control_msgs::action::GripperCommand;
@@ -85,7 +59,6 @@ namespace
 {
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
-using rg6_control::analog::map_clamped;
 }  // namespace
 
 class RG6ControlSimNode : public rclcpp::Node
@@ -104,24 +77,14 @@ public:
     declare_parameter<double>("action_goal_angle_tol", 0.08);
     declare_parameter<std::string>("joint_prefix", "rg6_");
 
-    // Analog-Kalibrierung des Rueckkanals -- 1:1 die Defaults des Realtreibers
-    // (analog_model.hpp).  Wer sie am Geraet nachjustiert, zieht sie hier mit.
-    declare_parameter<double>("width_in_open", rg6_control::analog::kWidthInOpenV);
-    declare_parameter<double>("width_in_closed", rg6_control::analog::kWidthInClosedV);
-    // AI2 bei weggenommener Toolspannung.  Muss unter dead_input_threshold
-    // (0,2 V) des Realtreibers liegen, sonst laesst sich der Totzustand im
-    // Container nicht mehr provozieren -- das ist die Bedingung, unter der ein
-    // simulierter Analogwert ueberhaupt vertretbar ist.
-    declare_parameter<double>("sim_width_in_dead", rg6_control::analog::kSimDeadInputV);
 
     width_ = get_parameter("width_open_m").as_double();
     target_width_ = width_;
 
     blocking_cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 
-    state_pub_ = create_publisher<rg6_msgs::msg::GripperState>("rg6/state", rclcpp::QoS(10));
-    // Derselbe Zustand als flaches JSON, unter dem Namen, den auch
-    // rg6_grip_bridge am Roboter benutzt.  Ohne ihn liest der plan_server im
+    // Der Zustand als flaches JSON, unter dem Namen, den auch rg6_grip_bridge
+    // am Roboter benutzt.  Ohne ihn liest der plan_server im
     // Container ins Leere -- genau der Fehler, der auf 'real' seit dem
     // rg6_control-Ruhestand bestand und am 2026-08-19 aufgefallen ist.
     bridge_state_pub_ = create_publisher<std_msgs::msg::String>(
@@ -134,52 +97,7 @@ public:
     const double state_rate = get_parameter("state_rate").as_double();
     state_timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / std::max(1.0, state_rate)),
-      [this]() { publish_state(); });
-
-    auto make_trigger = [this](const std::string & name, bool close_cmd) {
-        return create_service<std_srvs::srv::Trigger>(
-          name,
-          [this, close_cmd](
-            const std::shared_ptr<std_srvs::srv::Trigger::Request>,
-            std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
-            handle_open_close(close_cmd, response);
-          },
-          rclcpp::ServicesQoS(), blocking_cb_group_);
-      };
-    open_service_ = make_trigger("rg6_control/open", false);
-    close_service_ = make_trigger("rg6_control/close", true);
-
-    grip_service_ = create_service<rg6_msgs::srv::Grip>(
-      "rg6_control/grip",
-      std::bind(&RG6ControlSimNode::handle_grip, this,
-        std::placeholders::_1, std::placeholders::_2),
-      rclcpp::ServicesQoS(), blocking_cb_group_);
-
-    force_preset_service_ = create_service<std_srvs::srv::SetBool>(
-      "rg6_control/set_force_preset",
-      [this](const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
-        std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
-        {
-          std::lock_guard<std::mutex> lk(mutex_);
-          high_force_preset_ = request->data;
-        }
-        response->success = true;
-        response->message = request->data ? "Kraft-Preset: high (sim)" : "Kraft-Preset: low (sim)";
-      },
-      rclcpp::ServicesQoS(), blocking_cb_group_);
-
-    tool_power_service_ = create_service<std_srvs::srv::SetBool>(
-      "rg6_control/set_tool_power",
-      [this](const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
-        std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
-        {
-          std::lock_guard<std::mutex> lk(mutex_);
-          tool_power_on_ = request->data;
-        }
-        response->success = true;
-        response->message = request->data ? "Tool-Spannung 24V an (sim)" : "Tool-Spannung aus (sim)";
-      },
-      rclcpp::ServicesQoS(), blocking_cb_group_);
+      [this]() { publish_bridge_state(); });
 
     action_server_ = rclcpp_action::create_server<GripperCommand>(
       this, "rg6_gripper_controller/gripper_cmd",
@@ -207,10 +125,6 @@ private:
     const double speed = get_parameter("sim_speed_m_s").as_double();
     const double object_w = get_parameter("sim_object_width_m").as_double();
     std::lock_guard<std::mutex> lk(mutex_);
-    if (!tool_power_on_) {
-      moving_ = false;
-      return;  // ohne Toolspannung bewegt sich nichts
-    }
     double effective_target = target_width_;
     // Objekt im Weg? Schliessen stoppt an der Objektweite -> grip detected.
     if (object_w > 0.0 && effective_target < object_w && width_ >= object_w) {
@@ -276,19 +190,6 @@ private:
     return rg6_control::finger_kinematics::width_from_angle(angle);
   }
 
-  // Weite -> AI2-Spannung: der Weg, den nur der Sim geht.  Die Hardware misst
-  // AI2 und rechnet vorwaerts (rg6_control.cpp: width_from_raw), der Sim kennt
-  // die Weite und muss den Messwert daraus erzeugen.
-  double raw_from_width(double width_m) const
-  {
-    return rg6_control::analog::raw_from_width(
-      width_m,
-      get_parameter("width_closed_m").as_double(),
-      get_parameter("width_open_m").as_double(),
-      get_parameter("width_in_closed").as_double(),
-      get_parameter("width_in_open").as_double());
-  }
-
   struct MotionResult
   {
     bool settled{false};
@@ -321,7 +222,7 @@ private:
       std::this_thread::sleep_for(20ms);
       std::lock_guard<std::mutex> lk(mutex_);
       if (!moving_) {
-        result.settled = tool_power_on_;  // ohne Spannung: nie "fertig"
+        result.settled = true;
         result.grip_detected = grip_detected_;
         result.final_width_m = width_;
         break;
@@ -333,66 +234,6 @@ private:
       result.grip_detected = grip_detected_;
     }
     return result;
-  }
-
-  // --------- Services ------------------------------------------------------
-  void handle_open_close(bool close_cmd, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
-  {
-    std::unique_lock<std::mutex> motion_lock(motion_mutex_, std::try_to_lock);
-    if (!motion_lock.owns_lock()) {
-      response->success = false;
-      response->message = "RG6-SIM: Bewegung laeuft bereits";
-      return;
-    }
-    {
-      std::lock_guard<std::mutex> lk(mutex_);
-      last_command_ = close_cmd ? rg6_msgs::msg::GripperState::COMMAND_CLOSE :
-        rg6_msgs::msg::GripperState::COMMAND_OPEN;
-    }
-    const double target = close_cmd ? get_parameter("width_closed_m").as_double() :
-      get_parameter("width_open_m").as_double();
-    const auto result = start_motion_and_wait(target);
-    response->success = result.settled;
-    std::ostringstream msg;
-    msg << (result.settled ? "Gripper motion settled (OK)" : "Gripper motion did not settle (TIMEOUT)");
-    if (result.grip_detected) {
-      msg << ", grip detected";
-    }
-    msg << ", width=" << result.final_width_m << " m [sim]";
-    response->message = msg.str();
-  }
-
-  void handle_grip(
-    const std::shared_ptr<rg6_msgs::srv::Grip::Request> request,
-    std::shared_ptr<rg6_msgs::srv::Grip::Response> response)
-  {
-    std::unique_lock<std::mutex> motion_lock(motion_mutex_, std::try_to_lock);
-    if (!motion_lock.owns_lock()) {
-      response->success = false;
-      response->message = "RG6-SIM: Bewegung laeuft bereits";
-      return;
-    }
-    {
-      std::lock_guard<std::mutex> lk(mutex_);
-      last_command_ = rg6_msgs::msg::GripperState::COMMAND_GRIP;
-    }
-    if (!request->wait) {
-      std::lock_guard<std::mutex> lk(mutex_);
-      target_width_ = request->width;
-      grip_detected_ = false;
-      moving_ = true;
-      response->success = true;
-      response->final_width = kNaN;
-      response->message = "grip-Kommando abgesetzt (sim, wait=false)";
-      return;
-    }
-    const auto result = start_motion_and_wait(request->width);
-    response->success = result.settled;
-    response->grip_detected = result.grip_detected;
-    response->final_width = result.final_width_m;
-    response->message = result.settled ?
-      (result.grip_detected ? "Grip OK (Objekt erkannt) [sim]" : "Grip OK (Zielweite erreicht) [sim]") :
-      "Grip nicht abgeschlossen (TIMEOUT) [sim]";
   }
 
   // --------- GripperCommand-Action -----------------------------------------
@@ -413,7 +254,7 @@ private:
 
     {
       std::lock_guard<std::mutex> lk(mutex_);
-      last_command_ = rg6_msgs::msg::GripperState::COMMAND_GRIP;
+      last_command_ = "GRIP";
     }
 
     std::atomic<bool> feedback_running{true};
@@ -456,29 +297,6 @@ private:
   }
 
   // --------- Zustands-Publisher --------------------------------------------
-  void publish_state()
-  {
-    rg6_msgs::msg::GripperState msg;
-    msg.header.stamp = get_clock()->now();
-    std::lock_guard<std::mutex> lk(mutex_);
-    msg.width = width_;
-    // Stromlos faellt der Analogeingang unter die Totschwelle -- genau das Signal,
-    // an dem die plan-bridge "Kommando kann nicht wirken" erkennt.  Bestromt
-    // traegt er ueber den ganzen Hub die zurueckgerechnete Weite.
-    msg.width_raw = tool_power_on_ ?
-      raw_from_width(width_) : get_parameter("sim_width_in_dead").as_double();
-    msg.force_raw = kNaN;  // Motorstrom AI3: kein ehrliches Modell, s. Dateikopf
-    msg.busy = moving_;
-    msg.grip_detected = grip_detected_;
-    msg.io_states_received = true;
-    msg.tool_data_received = true;
-    msg.tool_power_on = tool_power_on_;
-    msg.high_force_preset = high_force_preset_;
-    msg.last_command = last_command_;
-    state_pub_->publish(msg);
-    publish_bridge_state_locked();
-  }
-
   // Die Felder von rg6_grip_bridge.status_payload(), Zeichen fuer Zeichen --
   // wer hier etwas umbenennt, macht den Container zum Sonderfall.
   //
@@ -486,15 +304,8 @@ private:
   // rg_get_safety_failed.  Der Sim hat keine Stoerung zu melden und schreibt
   // deshalb 0 / false; das ist keine Behauptung ueber Hardware, sondern die
   // ehrliche Aussage "in dieser Simulation gibt es nichts zu stoeren".
-  void publish_bridge_state_locked()
+  void publish_bridge_state()
   {
-    const char * cmd = "NONE";
-    switch (last_command_) {
-      case rg6_msgs::msg::GripperState::COMMAND_OPEN: cmd = "OPEN"; break;
-      case rg6_msgs::msg::GripperState::COMMAND_CLOSE: cmd = "CLOSE"; break;
-      case rg6_msgs::msg::GripperState::COMMAND_GRIP: cmd = "GRIP"; break;
-      default: cmd = "NONE"; break;
-    }
     std::ostringstream os;
     os << std::fixed << std::setprecision(6)
        << "{\"width_m\": " << width_
@@ -502,18 +313,14 @@ private:
        << ", \"grip_detected\": " << (grip_detected_ ? "true" : "false")
        << ", \"status\": 0"
        << ", \"safety_failed\": false"
-       << ", \"last_command\": \"" << cmd << "\"}";
+       << ", \"last_command\": \"" << last_command_ << "\"}";
     std_msgs::msg::String out;
     out.data = os.str();
     bridge_state_pub_->publish(out);
   }
 
   rclcpp::CallbackGroup::SharedPtr blocking_cb_group_;
-  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr open_service_, close_service_;
-  rclcpp::Service<rg6_msgs::srv::Grip>::SharedPtr grip_service_;
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr force_preset_service_, tool_power_service_;
   rclcpp_action::Server<GripperCommand>::SharedPtr action_server_;
-  rclcpp::Publisher<rg6_msgs::msg::GripperState>::SharedPtr state_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr bridge_state_pub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_pub_;
   rclcpp::TimerBase::SharedPtr tick_timer_, state_timer_;
@@ -523,9 +330,7 @@ private:
   double target_width_{0.16};
   bool moving_{false};
   bool grip_detected_{false};
-  bool tool_power_on_{true};  // sim: Greifer sofort "bestromt"
-  bool high_force_preset_{false};
-  uint8_t last_command_{rg6_msgs::msg::GripperState::COMMAND_NONE};
+  const char * last_command_{"NONE"};
 
   std::mutex motion_mutex_;
 };

@@ -4,6 +4,36 @@ Was sich wann geändert hat. Der aktuelle Stand steht in der [README](README.md)
 die Einbettung in den Onboard-Stack in
 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
+## 2026-08-19 (Altlasten)
+
+- **`rg6_control_sim` bildet nur noch die Oberflaeche der Bruecke nach.**
+  Entfallen sind die Services `rg6_control/{open,close,grip,set_force_preset,
+  set_tool_power}`, das Topic `rg6/state` (`rg6_msgs/GripperState`) und das
+  AI2-Modell. Sie gehoerten zum geloeschten Tool-DO-Treiber; am Roboter gibt
+  es sie nicht mehr, und seit `husky_sdk` auf die Action umgestellt ist, ruft
+  sie niemand. Ein Mock, der eine Oberflaeche nachbildet, die es nirgends
+  gibt, ist eine Vorlage fuer Code gegen etwas, das nicht existiert. Der Node
+  ist von 542 auf 347 Zeilen geschrumpft; am laufenden Container nachgesehen
+  bietet er jetzt genau `rg6_gripper_controller/gripper_cmd`,
+  `rg6/bridge_state` und das Treibergelenk.
+- **Das alte Greifermodell ist weg** — `onrobot_rg6.xacro`,
+  `onrobot_rg6_model.xacro`, `onrobot_rg6_model_macro.xacro` und die vier
+  Meshes `visual/{base_link,inner_finger,inner_knuckle,outer_knuckle}.stl`.
+  Sie referenzierten nur noch einander: eine geschlossene tote Insel, die
+  jederzeit wieder jemand haette einbinden koennen.
+- **`analog_model.hpp` und `test_analog_model.cpp` sind entfallen.** Die
+  Kennlinie Greifweite <-> Tool-AI2-Spannung beschreibt einen Kanal, an dem
+  der RG6 nicht mehr haengt, und die Kurbelschwinge darin gehoerte zum alten
+  Modell. Was der Greifer im Container tut, prueft jetzt eine E2E gegen den
+  laufenden Stack (`plan-bridge/tests/test_offboard_gripper.py`).
+- `std_srvs`, `rg6_msgs` und `ur_robot_driver` sind aus den Abhaengigkeiten
+  von `rg6_control` entfallen.
+- **`rg6_msgs` BLEIBT** und sagt jetzt in seiner Paketbeschreibung warum:
+  alle fuenf Aufnahmen in `clearpath/data/recordings/` enthalten
+  `/a200_0553/manipulators/rg6/state` vom Typ `rg6_msgs/msg/GripperState`.
+  Ohne das Paket sind sie nicht mehr abspielbar -- es ist die Typdefinition
+  eines Archivs, keine Altlast.
+
 ## 2026-08-19 (Nachlese zum URCap-Umbau)
 
 - **Der SRDF-Patch traegt wieder zwei `disable_collisions` — und ohne sie plant

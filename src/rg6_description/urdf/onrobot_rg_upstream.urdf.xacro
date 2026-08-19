@@ -1,5 +1,13 @@
 <?xml version="1.0"?>
 
+<!-- Meshpfade: package:// statt des Upstream-"file://$(find ...)".
+     Zwei Gruende, beide gemessen am 2026-08-19:
+     1. Die foxglove_bridge liefert nur aus, was ihre asset_uri_allowlist
+        erlaubt, und die lautet "^package://...".  Mit file:// zeigt Foxglove
+        das Modell OHNE Meshes; genau das war das Symptom am Roboter.
+     2. file://$(find ...) nagelt den absoluten Pfad des BAUENDEN Rechners
+        ins Modell (/home/robot/onrobot-rg6/install/...).  Weder Workstation
+        noch Container noch eine Wiedergabe koennen ihn aufloesen. -->
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="onrobot_rg_macro">
 
   <!-- materials -->
@@ -49,13 +57,13 @@
     <link name="${gripper_name}_bracket">
       <visual>
         <geometry>
-          <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/${bracket}.stl"/>
+          <mesh filename="package://rg6_description/meshes/${model}/visual/${bracket}.stl"/>
         </geometry>
         <material name="onrobot/grey"/>
       </visual>
       <collision>
         <geometry>
-          <mesh filename="file://$(find rg6_description)/meshes/${model}/collision/${bracket}.stl"/>
+          <mesh filename="package://rg6_description/meshes/${model}/collision/${bracket}.stl"/>
         </geometry>
       </collision>
       <xacro:_inertial id="${bracket}"/>
@@ -71,13 +79,13 @@
     <link name="${gripper_name}_body">
       <visual>
         <geometry>
-          <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/body.stl"/>
+          <mesh filename="package://rg6_description/meshes/${model}/visual/body.stl"/>
         </geometry>
         <material name="onrobot/light_grey"/>
       </visual>
       <collision>
         <geometry>
-          <mesh filename="file://$(find rg6_description)/meshes/${model}/collision/body.stl"/>
+          <mesh filename="package://rg6_description/meshes/${model}/collision/body.stl"/>
         </geometry>
       </collision>
       <xacro:_inertial id="body"/>
@@ -119,13 +127,13 @@
       <link name="${name}_moment_arm">
         <visual>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/moment_arm.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/moment_arm.stl"/>
           </geometry>
           <material name="onrobot/light_grey"/>
         </visual>
         <collision>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/collision/moment_arm.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/moment_arm.stl"/>
           </geometry>
         </collision>
         <xacro:_inertial id="moment_arm"/>
@@ -147,13 +155,13 @@
       <link name="${name}_truss_arm">
         <visual>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/truss_arm.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/truss_arm.stl"/>
           </geometry>
           <material name="onrobot/light_grey"/>
         </visual>
         <collision>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/collision/truss_arm.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/truss_arm.stl"/>
           </geometry>
         </collision>
         <xacro:_inertial id="truss_arm"/>
@@ -173,13 +181,13 @@
         <link name="${name}_safety_shield">
           <visual>
             <geometry>
-              <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/safety_shield.stl"/>
+              <mesh filename="package://rg6_description/meshes/${model}/visual/safety_shield.stl"/>
             </geometry>
             <material name="onrobot/dark_grey"/>
           </visual>
           <collision>
             <geometry>
-              <mesh filename="file://$(find rg6_description)/meshes/${model}/collision/safety_shield.stl"/>
+              <mesh filename="package://rg6_description/meshes/${model}/collision/safety_shield.stl"/>
               <box size="0.0 0.0 0.0"/>
             </geometry>
           </collision>
@@ -200,18 +208,18 @@
       <link name="${name}_finger_tip">
         <visual>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/finger_tip.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/finger_tip.stl"/>
           </geometry>
           <material name="onrobot/light_grey"/>
         </visual>
         <collision>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/finger_tip.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/finger_tip.stl"/>
           </geometry>
         </collision>
         <collision>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/finger_tip.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/finger_tip.stl"/>
           </geometry>
         </collision>
         <xacro:_inertial id="finger_tip"/>
@@ -230,13 +238,13 @@
       <link name="${name}_flex_finger">
         <visual>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/visual/flex_finger.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/flex_finger.stl"/>
           </geometry>
           <material name="onrobot/dark_grey"/>
         </visual>
         <collision>
           <geometry>
-            <mesh filename="file://$(find rg6_description)/meshes/${model}/collision/flex_finger.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/flex_finger.stl"/>
           </geometry>
         </collision>
         <xacro:_inertial id="flex_finger"/>

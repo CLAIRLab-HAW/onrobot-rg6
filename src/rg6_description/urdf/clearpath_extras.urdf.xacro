@@ -53,25 +53,21 @@
        daher Roll -90deg um X. Falls noch verdreht, je 90deg variieren:
          rpy="1.5708 0 0" | rpy="0 0 1.5708" | rpy="0 0 -1.5708"
 
-       z = 0,0196 ist die ROBOTERSEITE des Quick Changers (Variante fuer I/O,
-       QC-Datenblatt v2.0; die Standardvariante waere 0,0136).  Sie sass bis
-       2026-08-19 auf 0, der ganze Greifer stand damit 19,6 mm zu hoch am Arm.
-       Die WERKZEUGseite steckt bereits im Mesh: die untersten 20 mm von
-       base_link.stl sind die Scheibe Ø71 mm, und der Frame liegt auf der
-       Trennebene der beiden Haelften (am Mesh nachgemessen, ROBOTER-TODO R20).
-       Unabhaengig bestaetigt am fremden Modell (inria onrobot_description,
-       rg6_v2): dort reicht body.stl 19 mm unter seinen eigenen Ursprung, mit
-       Ø69,5 mm, also dieselbe Scheibe und derselbe Bezugspunkt.
-
-       ACHTUNG, das verschiebt eine kalibrierte Groesse: hrl setzt fuer echte
-       Hardware descend_offset = 0,065 gegen 0,045 in der Sim, ein Aufschlag
-       von 20,0 mm, der genau diesen Fehler blind bezahlt hat.  Nach dieser
-       Korrektur greift der Arm 19,6 mm ZU HOCH, bis der Aufschlag mit
-       zurueckgenommen wird.  Nicht ohne einen Griff am Geraet nachziehen. -->
+       z = 0: der Greifer sitzt UNMITTELBAR auf dem Flansch.  Am 2026-08-19
+       vom Owner am Geraet nachgesehen, nachdem hier zwischenzeitlich 0,0196
+       stand.  Diese 19,6 mm kamen aus ROBOTER-TODO R20, das aus dem
+       QC-Datenblatt geschlossen hatte, die ROBOTERSEITE des Quick Changers
+       fehle im Modell.  Der Schluss setzte eine separate QC-Scheibe zwischen
+       Flansch und Greifer voraus; die gibt es an diesem Roboter nicht.  Der
+       Fuss der Greiferbasis IST die Kopplungsflaeche (Ø71 mm, am Mesh
+       gemessen; unterste 20 mm von base_link.stl, und im fremden rg6_v2-Modell
+       ebenso als unterste Scheibe des single_bracket) und schraubt direkt auf
+       den Flansch.  Dazwischen liegt nur der 0,4-mm-Zentrierring des
+       UR-Flansches, und der ist eine Vertiefung, kein Aufbau. -->
   <joint name="rg6_tool0_to_base" type="fixed">
     <parent link="arm_0_tool0"/>
     <child link="rg6_onrobot_rg6_base_link"/>
-    <origin xyz="0 0 0.0196" rpy="0 0 -1.5708"/>
+    <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
   </joint>
 
   <!-- Greifer-TCP (mittig zwischen den Fingerspitzen, grob). -->

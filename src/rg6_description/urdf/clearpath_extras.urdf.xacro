@@ -55,11 +55,21 @@
 
        driver_joint haelt den Namen fest, den der ganze Workspace kennt:
        rg6_finger_joint, 0 = offen, positiv = zu.  Die Folgegelenke haengen
-       per mimic daran. -->
+       per mimic daran.
+
+       KEINE Drehung.  Das ALTE Modell brauchte hier rpy="0 0 -1.5708", und
+       sein Kommentar sagte selbst, das sei erprobt ("falls noch verdreht, je
+       90 Grad variieren").  Diese Zahl gehoerte zu jenem Mesh; mitgeschleppt
+       stand der Greifer am 2026-08-19 sichtbar um 90 Grad verdreht.
+       Nachgemessen als Oeffnungsrichtung der Finger im Flanschrahmen:
+         altes Modell, rpy 0 0 -1.5708 -> [-1  0  0]   (so sah es korrekt aus)
+         neues Modell, rpy 0 0  0      -> [-1  0  0]   deckungsgleich
+         neues Modell, rpy 0 0 -1.5708 -> [ 0 +1  0]   die 90 Grad
+       Wer hier wieder eine Drehung eintragen will, misst vorher nach. -->
   <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg_upstream.urdf.xacro"/>
   <xacro:onrobot_rg parent="arm_0_tool0" prefix="rg6_" model="rg6_v2"
                     driver_joint="rg6_finger_joint">
-    <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </xacro:onrobot_rg>
 
   <!-- Alter Name, gleicher Ort.  rg6_onrobot_rg6_base_link ist der Bezugspunkt

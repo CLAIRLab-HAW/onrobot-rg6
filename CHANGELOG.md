@@ -6,6 +6,26 @@ die Einbettung in den Onboard-Stack in
 
 ## 2026-08-19
 
+- **Der SRDF-Patch ist halb so gross und nicht mehr schaedlich.** Er trug die
+  Linknamen des ALTEN Greifermodells hart ein (`left_inner_knuckle`,
+  `right_outer_knuckle`, …) und haette sie nach jedem Boot in ein korrektes
+  SRDF zurueckgeschrieben; sein Idempotenz-Check merkt das nicht, weil er nur
+  prueft, *ob* sein Block dasteht, nicht *ob dessen Links existieren*.
+  Gemessen und daraufhin entfernt: die **`disable_collisions`-Haelfte ist
+  ueberfluessig geworden** — das frisch erzeugte SRDF enthaelt bereits **82**
+  Greiferpaare, die der `moveit_collision_updater` aus dem neuen URDF selbst
+  ableitet. Sie war ein Behelf fuer das selbstgebaute Modell.
+  **Geblieben** sind Planungsgruppe, `group_states` open/close und
+  `end_effector` (mit den neuen Gelenknamen und den Ankern 0,0 / 1,25478) sowie
+  der `moveit.yaml`-Teil: GripperCommand-Controller, `max_effort` und
+  `joint_limits`. Damit kann MoveIt den Greifer weiter oeffnen, schliessen,
+  auf eine Weite fahren — und die Kraft kommt entweder aus `max_effort` oder
+  je Ziel aus dem `effort`-Feld des Bahnpunkts (`gripper_command_controller_handle.hpp`
+  Zeile 143 gegen 147).
+  Gegenprobe am Container: das SRDF nennt **keinen** Link und **kein** Gelenk,
+  das es im URDF nicht gibt (vorher sieben).
+
+
 - **Das vermessene RG6-Modell ist einvendort** (`onrobot_description`, rg6_v2,
   MIT, INRIA — Herkunft in [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)):
   sieben visuelle Meshes plus eigene Kollisionsmeshes, Ursprünge und Grenzen

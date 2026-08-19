@@ -24,13 +24,24 @@ clearpath-custom-setup.py):
        moveit_collision_updater erzeugt mit dem rg6_v2-Modell 82 Greiferpaare
        selbst und korrekt benannt, aber diese beiden NICHT, und genau sie sind
        ueber den ganzen Hub in Kontakt (s. Kommentar am SRDF_FRAGMENT_TEMPLATE).
-  2. <setup>/manipulators/config/moveit.yaml:
+  2. <setup>/manipulators/config/moveit.yaml wird NICHT mehr gepatcht, nur
+     noch GEPRUEFT. Seit dem 2026-08-19 stehen beide Eintraege in robot.yaml
+     unter manipulators.moveit.ros_parameters.move_group, und der Clearpath-
+     Generator schreibt sie selbst in moveit.yaml (deep-merge, empirisch
+     verifiziert -- s. CHANGELOG):
        + moveit_simple_controller_manager: GripperCommand-Controller
          'manipulators/rg6_gripper_controller' (action_ns gripper_cmd) ->
          bedient von rg6_grip_bridge am Roboter, von rg6_control_sim im Mock
          (beide unter demselben Namen rg6_gripper_controller/gripper_cmd)
        + robot_description_planning.joint_limits.rg6_finger_joint
          (Beschleunigungslimit fuer TOTG-Zeitparametrierung)
+     Grund fuer den Umzug: robot.yaml ist die versionierte SSOT (husky-custom-
+     setup) und gilt fuer Roboter UND Offboard-Container zugleich; der SRDF-
+     Teil hat dagegen keinen Hebel in robot.yaml (clearpath_config kennt das
+     Wort 'srdf' nicht, und Gripper.MODEL ist ein geschlossenes Enum ohne RG6).
+     verify_moveit_yaml quittiert mit Exit-Code 1, wenn die Werte fehlen --
+     sonst faellt eine veraltete robot.yaml erst auf, wenn MoveIt den Greifer
+     nicht mehr ansteuern kann.
 
 Aufrufe:
   Roboter:  aus clearpath-custom-setup.py (per Boot, vor clearpath-manipulators)
@@ -214,77 +225,78 @@ def patch_srdf(path, args):
 
 
 # --------------------------- moveit.yaml ------------------------------------
-def patch_moveit_yaml(path, args):
-    """GripperCommand-Controller + joint_limits ins generierte moveit.yaml."""
+def verify_moveit_yaml(path, args):
+    """Pruefen (NICHT patchen), ob robot.yaml die MoveIt-Greiferwerte geliefert hat.
+
+    Beide Eintraege kommen seit dem 2026-08-19 aus robot.yaml durch den
+    Clearpath-Generator. Faellt einer weg -- alte robot.yaml, vertippter Key,
+    Generator ohne den Merge --, dann startet move_group klaglos und der
+    Greifer ist erst dann als fehlend zu erkennen, wenn ein GripperCommand-Goal
+    ins Leere laeuft. Diese Pruefung macht daraus eine sichtbare Meldung.
+
+    Rueckgabe: True = alles da, False = etwas fehlt (Aufrufer -> Exit-Code 1).
+    """
     try:
         import yaml
     except ImportError:
-        log("FEHLER: PyYAML fehlt (apt: python3-yaml) - moveit.yaml nicht gepatcht.",
+        log("WARN: PyYAML fehlt (apt: python3-yaml) - moveit.yaml nicht geprueft.",
             err=True)
-        return False
+        return True
 
     if not os.path.isfile(path):
-        log(f"WARN: moveit.yaml nicht gefunden, uebersprungen: {path}", err=True)
-        return False
+        log(f"WARN: moveit.yaml nicht gefunden, nicht geprueft: {path}", err=True)
+        return True
 
     with open(path) as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
-        log(f"WARN: {path} hat unerwartetes Format, uebersprungen.", err=True)
-        return False
+        log(f"WARN: {path} hat unerwartetes Format, nicht geprueft.", err=True)
+        return True
 
     # Top-Level = Namespace-Key (z. B. 'a200_0553') -> move_group.ros__parameters
     params = None
-    for ns_key, ns_val in data.items():
+    for ns_val in data.values():
         if isinstance(ns_val, dict) and "move_group" in ns_val:
             params = ns_val["move_group"].get("ros__parameters")
             break
-    if params is None:
-        log("WARN: kein move_group.ros__parameters in moveit.yaml, uebersprungen.",
+    if not isinstance(params, dict):
+        log("WARN: kein move_group.ros__parameters in moveit.yaml, nicht geprueft.",
             err=True)
+        return True
+
+    driver_joint = f"{args.prefix}finger_joint"
+    missing = []
+
+    mscm = params.get("moveit_simple_controller_manager")
+    if not isinstance(mscm, dict):
+        missing.append("moveit_simple_controller_manager")
+    else:
+        if args.controller_name not in (mscm.get("controller_names") or []):
+            missing.append(f"moveit_simple_controller_manager.controller_names[]"
+                           f" -> {args.controller_name}")
+        block = mscm.get(args.controller_name)
+        if not isinstance(block, dict):
+            missing.append(f"moveit_simple_controller_manager.{args.controller_name}")
+        elif block.get("type") != "GripperCommand":
+            missing.append(f"{args.controller_name}.type == GripperCommand "
+                           f"(ist: {block.get('type')!r})")
+
+    limits = (params.get("robot_description_planning") or {}).get("joint_limits") or {}
+    if driver_joint not in limits:
+        missing.append(f"robot_description_planning.joint_limits.{driver_joint}")
+
+    if missing:
+        log("FEHLER: MoveIt-Greiferwerte fehlen in der generierten moveit.yaml:",
+            err=True)
+        for item in missing:
+            log(f"  fehlt: {item}", err=True)
+        log("Sie kommen aus robot.yaml -> manipulators.moveit.ros_parameters."
+            "move_group (SSOT: husky-custom-setup). Veraltete robot.yaml im "
+            "Container (ROBOT_YAML_URL) oder unter /etc/clearpath?", err=True)
         return False
 
-    changed = False
-
-    mscm = params.setdefault("moveit_simple_controller_manager", {})
-    names = mscm.setdefault("controller_names", [])
-    if args.controller_name not in names:
-        names.append(args.controller_name)
-        changed = True
-    controller_block = {
-        "action_ns": args.action_ns,
-        "default": True,
-        "joints": [f"{args.prefix}finger_joint"],
-        "type": "GripperCommand",
-        # max_effort der GripperCommand-Goals von move_group [N]; 0 wuerde
-        # rg6_control auf grip_default_force_n zurueckfallen lassen.
-        "max_effort": args.max_effort,
-    }
-    if mscm.get(args.controller_name) != controller_block:
-        mscm[args.controller_name] = controller_block
-        changed = True
-
-    # TOTG (AddTimeOptimalParameterization) braucht Beschleunigungslimits, sonst
-    # schlaegt die Zeitparametrierung fuer die Gripper-Gruppe fehl.
-    limits = params.setdefault("robot_description_planning", {}).setdefault(
-        "joint_limits", {})
-    joint_limits_block = {
-        "has_velocity_limits": True,
-        "max_velocity": args.max_velocity,
-        "has_acceleration_limits": True,
-        "max_acceleration": args.max_acceleration,
-    }
-    if limits.get(f"{args.prefix}finger_joint") != joint_limits_block:
-        limits[f"{args.prefix}finger_joint"] = joint_limits_block
-        changed = True
-
-    if not changed:
-        log(f"moveit.yaml: bereits korrekt ({path}).")
-        return False
-
-    atomic_write(path, yaml.safe_dump(data, sort_keys=False, default_flow_style=False))
-    log(f"moveit.yaml: GripperCommand-Controller '{args.controller_name}' + "
-        f"joint_limits gesetzt ({path}).")
+    log(f"moveit.yaml: Greiferwerte aus robot.yaml vorhanden "
+        f"({args.controller_name}, joint_limits.{driver_joint}).")
     return True
 
 
@@ -318,21 +330,24 @@ def main():
                              "durcheinander hindurch (default: 1.25478)")
     parser.add_argument("--controller-name",
                         default="manipulators/rg6_gripper_controller",
-                        help="MoveIt-Controllername (relativ zum move_group-Namespace)")
-    parser.add_argument("--action-ns", default="gripper_cmd",
-                        help="Action-Namespace des Controllers (default: gripper_cmd)")
-    parser.add_argument("--max-effort", type=float, default=60.0,
-                        help="max_effort der MoveIt-GripperCommand-Goals [N] (default: 60)")
-    parser.add_argument("--max-velocity", type=float, default=2.0,
-                        help="joint_limits max_velocity [rad/s] (default: 2.0)")
-    parser.add_argument("--max-acceleration", type=float, default=4.0,
-                        help="joint_limits max_acceleration [rad/s^2] (default: 4.0)")
+                        help="MoveIt-Controllername, gegen den moveit.yaml geprueft "
+                             "wird (gesetzt wird er in robot.yaml, nicht hier)")
     args = parser.parse_args()
 
     setup = args.setup_path.rstrip("/")
     log(f"Start (setup: {setup}).")
     patch_srdf(os.path.join(setup, "robot.srdf"), args)
-    patch_moveit_yaml(os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
+    # Nur noch Kontrolle: moveit.yaml wird vom Clearpath-Generator aus
+    # robot.yaml befuellt (s. Modul-Docstring). Exit-Code 1 statt stiller
+    # Fahrt ohne Greifer-Controller; kein Abbruch beim Aufrufer, beide
+    # Einbindungen (Installer, offboard-entrypoint) loggen ihn nur.
+    ok = verify_moveit_yaml(
+        os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
+    if not ok:
+        # Auch auf stdout: wer nur den einen Stream liest (docker logs mischt
+        # beide unsortiert), soll das Scheitern trotzdem sehen.
+        log("Fertig - ABER moveit.yaml-Pruefung fehlgeschlagen (Details auf stderr).")
+        return 1
     log("Fertig.")
     return 0
 

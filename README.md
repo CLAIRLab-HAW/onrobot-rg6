@@ -159,7 +159,10 @@ MoveIt talks to the gripper through the standard **GripperCommand** pipeline:
 2. **moveit.yaml**: `moveit_simple_controller_manager` entry
    `manipulators/rg6_gripper_controller` (type `GripperCommand`, action_ns
    `gripper_cmd`, `max_effort` 60 N) + `joint_limits` for `rg6_finger_joint`
-   (TOTG needs acceleration limits).
+   (TOTG needs acceleration limits). These are **not patched** — they live in
+   `robot.yaml` under `manipulators.moveit.ros_parameters.move_group`, and
+   Clearpath's `generate_param` deep-merges them into the generated
+   `moveit.yaml` itself.
 3. **Action server**: `rg6_control` serves
    `<ns>/rg6_gripper_controller/gripper_cmd`. Goal positions at the endpoints
    (± `action_endpoint_angle_tol`) use the robust level command; intermediate
@@ -176,11 +179,20 @@ rg6_moveit_patch --setup-path /etc/clearpath   # robot (called by clearpath-cust
 rg6_moveit_patch --setup-path /clearpath       # offboard container (called by entrypoint)
 ```
 
-It edits `robot.srdf` (marker-framed block, updates in place) and
-`manipulators/config/moveit.yaml` (PyYAML round-trip), with `.bak` backups and
-atomic writes. The RG6 **collision pairs** need no patching: Clearpath's
+It edits **`robot.srdf` only** (marker-framed block, updates in place), with a
+`.bak` backup and an atomic write, and then **verifies** that the moveit.yaml
+values from `robot.yaml` arrived — exit code 1 and a pointer to the SSOT if
+they did not, so a stale `robot.yaml` shows up at boot instead of at the first
+gripper goal. The RG6 **collision pairs** need no patching: Clearpath's
 `moveit_collision_updater` sees the full URDF including `platform.extras` and
 already emits them.
+
+Why the split: `robot.yaml` has **no SRDF hook at all** — `clearpath_config`
+contains no occurrence of the string `srdf`, `robot.srdf.xacro` is generated
+purely from the arms/grippers/lifts loops, and `Gripper.MODEL` is a closed
+enum (`franka_gripper`, `kinova_2f_lite`, `robotiq_2f_140`, `robotiq_2f_85`)
+that rejects an RG6 entry with a `ValueError`. The moveit.yaml side, by
+contrast, is plain `ros_parameters` and needs no tool.
 
 Hooked up in:
 - `husky-custom-setup/install-clearpath-custom-setup.sh` → per-boot patcher

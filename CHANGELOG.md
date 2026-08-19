@@ -4,6 +4,39 @@ Was sich wann geändert hat. Der aktuelle Stand steht in der [README](README.md)
 die Einbettung in den Onboard-Stack in
 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
+## 2026-08-19 (moveit.yaml zurueck an robot.yaml)
+
+- **`rg6_moveit_patch` patcht nur noch die SRDF und prueft den Rest.** Die
+  zweite Haelfte des Tools -- GripperCommand-Controller
+  `manipulators/rg6_gripper_controller` und
+  `robot_description_planning.joint_limits.rg6_finger_joint` -- ist nach
+  `robot.yaml` gewandert (`manipulators.moveit.ros_parameters.move_group`,
+  husky-custom-setup). Nachgemessen im Container: der Clearpath-Generator
+  schreibt aus diesem Block eine `moveit.yaml`, die mit der frueher gepatchten
+  bis auf die **Reihenfolge** von `controller_names` identisch ist (als Menge
+  gleich, Rest deckungsgleich); `robot.srdf` blieb byteweise identisch. Damit
+  steht die Greifer-Anbindung in der versionierten SSOT statt in einem
+  Python-Template, gilt fuer Roboter und Offboard-Container zugleich, und eine
+  der beiden generierten Dateien verlaesst den Patch-Pfad.
+- **Fuer die SRDF gibt es diesen Weg nicht -- am Quelltext belegt.**
+  `clearpath_config` enthaelt das Wort `srdf` an **keiner** Stelle, es gibt
+  kein Gegenstueck zu `platform.extras.urdf` (`ExtrasConfig` kennt nur `urdf`,
+  `launch`, `ros_parameters`), `robot.srdf.xacro` entsteht ausschliesslich aus
+  den drei Schleifen Arms/Grippers/Lifts, und `Gripper.MODEL` ist ein
+  geschlossenes Enum (`franka_gripper`, `kinova_2f_lite`, `robotiq_2f_140`,
+  `robotiq_2f_85`), das `rg6` mit `ValueError` ablehnt. Der einzige
+  SRDF-Hebel in robot.yaml ist `poses` -> `group_state`, und der haengt an
+  einem Manipulator-Objekt, das es fuer den RG6 nicht geben kann.
+- **Neu: `verify_moveit_yaml` statt stiller Fahrt ohne Greifer.** Fehlen die
+  Werte in der generierten `moveit.yaml` -- veraltete `robot.yaml` unter
+  `/etc/clearpath` oder aus `ROBOT_YAML_URL` --, listet das Tool jeden
+  fehlenden Schluessel auf, nennt die SSOT und endet mit **Exit-Code 1**.
+  Ohne diese Pruefung faellt der Fall erst auf, wenn ein GripperCommand-Goal
+  ins Leere laeuft. Kein Aufrufer bricht daran ab; Installer und
+  offboard-Entrypoint loggen den Code. Entfallen sind die Argumente
+  `--action-ns`, `--max-effort`, `--max-velocity`, `--max-acceleration` --
+  ihre Werte stehen jetzt in robot.yaml.
+
 ## 2026-08-19 (Altlasten)
 
 - **`rg6_control_sim` bildet nur noch die Oberflaeche der Bruecke nach.**

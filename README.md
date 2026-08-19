@@ -10,7 +10,29 @@ commanded by **`rg6_grip_bridge`** (onboard, Python, in
 that: the measured model, the MoveIt wiring, the `joint_states` plumbing, and a
 mock that offers the same surface without hardware.
 
-## The canonical interface
+## Features
+
+- **The measured rg6_v2 model** (`rg6_description`): URDF/Xacro, visual and
+  collision meshes, Clearpath extras glue.
+- **One interface on both stages** — `rg6_gripper_controller/gripper_cmd` and
+  `rg6/bridge_state`, whether the real bridge or the container mock answers.
+- **MoveIt wiring that survives a reboot**: `rg6_moveit_patch` writes the SRDF
+  block Clearpath's generator cannot, and *verifies* that the moveit.yaml values
+  arrived from `robot.yaml` instead of failing silently.
+- **`joint_states` plumbing** for a multi-controller-manager robot: one complete
+  aggregate for recording, plus a RELIABLE relay `move_group` actually receives.
+- **A container mock** (`rg6_control_sim`) offering exactly the real surface —
+  no more, so nobody writes code against something that does not exist.
+- **A generated gear table** instead of a formula: the linkage has no closed
+  form, and the table is regenerated from the URDF.
+
+## Tech Stack
+
+ROS 2 Jazzy, `ament_cmake` (C++17), `control_msgs`, `sensor_msgs`,
+`std_msgs`. No `rg6_msgs` at runtime — the state is JSON in a
+`std_msgs/String`.
+
+### The canonical interface
 
 Both stages — real robot and offboard container — serve the **same names**, so
 a caller never branches on which one it is talking to:
@@ -36,7 +58,7 @@ a caller never branches on which one it is talking to:
 > reached is what `bridge_state` reports afterwards. `rg6_grip_bridge` takes
 > **one command at a time** and rejects a second one while moving.
 
-## How it works
+### How it works
 
 ```
                   this repository                    husky-custom-setup / UR
@@ -54,7 +76,7 @@ The URCap is an RTDE client itself and occupies `tool_digital_output_mask`, so
 which is why the gripper is commanded through the URCap and not through the
 UR tool interface.
 
-## Packages
+### Packages
 
 | Package | Type | Contents |
 |---|---|---|
@@ -63,7 +85,7 @@ UR tool interface.
 | `rg6_msgs` | interfaces | `msg/GripperState`, `srv/Grip` — **archive types only.** No running node uses them; they are kept because the recordings in `clearpath/data/recordings/` contain `rg6/state` of that type and would otherwise be unplayable. |
 | `tools/` | — | `derive_finger_kinematics.py`: regenerates the gear table from the URDF |
 
-## Build
+## Installation
 
 ```bash
 # from the workspace root (this folder)
@@ -72,7 +94,7 @@ colcon build --packages-select rg6_description rg6_msgs rg6_control
 source install/setup.bash
 ```
 
-## Run
+## Usage
 
 ### Container / simulation (no hardware)
 
@@ -215,13 +237,28 @@ Workspace in `system.ros2.workspaces`, `io_and_status_controller` via
   loop that only waits for the end of the motion returns immediately in that
   gap — wait for both edges.
 
-## History
+## Running Tests
 
-What changed when is in [CHANGELOG.md](CHANGELOG.md) — including the
-2026-08-19 handover from the tool-DO driver to the URCap bridge, which removed
-`rg6_control` (the driver), `rg6_joint_state_broadcaster`, the
-`rg6_control/*` services, the `rg6/state` topic and the AI2 model.
+The gripper has no unit suite of its own — what it does in the container is
+checked end-to-end against a running stack:
 
+```bash
+uv run pytest sdk/plan-bridge/tests/test_offboard_gripper.py    # needs the container
+```
+
+## Related
+
+- [husky-custom-setup](../husky-custom-setup/README.md) — `rg6_grip_bridge`,
+  the node that drives the real gripper
+- [robot-contract](../../contract/robot-contract/README.md) — the profile that
+  names the action, the state topic and the gear table
+- [husky-offboard](../../deploy/husky-offboard/README.md) — the container that
+  builds and runs the mock
+
+## Versioning
+
+[Semantic Versioning](https://semver.org/); see [CHANGELOG.md](CHANGELOG.md).
 ## License
 
 See `src/rg6_description/LICENSE`. `rg6_control`/`rg6_msgs`: BSD-3-Clause.
+

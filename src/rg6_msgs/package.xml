@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>rg6_msgs</name>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <description>Nachrichten/Services des STILLGELEGTEN OnRobot-RG6-Treibers
     (rg6_control, Tool-DO-Pfad, entfallen am 2026-08-19).  Kein laufender Node
     benutzt sie mehr -- der Greifer spricht ueber die GripperCommand-Action und

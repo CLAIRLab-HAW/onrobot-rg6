@@ -4,8 +4,14 @@ Was sich wann geändert hat. Der aktuelle Stand steht in der [README](README.md)
 die Einbettung in den Onboard-Stack in
 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
-## 2026-08-19 (README auf den Ist-Zustand)
+Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
+die Versionierung [Semantic Versioning](https://semver.org/lang/de/).
 
+## [Unreleased]
+
+## [0.2.0] - 2026-08-19
+
+### README auf den Ist-Zustand
 - **Die README beschrieb noch den geloeschten Tool-DO-Treiber.** Sie fuehrte
   neun `rg6_control/*`-Services, das Topic `rg6/state`, den
   `rg6_joint_state_broadcaster`, die AI2-Kennlinie samt Kalibrierverfahren, das
@@ -34,7 +40,7 @@ die Einbettung in den Onboard-Stack in
   Analogmodell entfallen. Die Werte kommen aus `finger_kinematics.hpp`.
 - Gemessene Zahlen behalten ihr Datum. Sie sagen, wie frisch der Wert ist.
 
-## 2026-08-19 (moveit.yaml zurueck an robot.yaml)
+### moveit.yaml zurueck an robot.yaml
 
 - **`rg6_moveit_patch` patcht nur noch die SRDF und prueft den Rest.** Die
   zweite Haelfte des Tools -- GripperCommand-Controller
@@ -67,7 +73,7 @@ die Einbettung in den Onboard-Stack in
   `--action-ns`, `--max-effort`, `--max-velocity`, `--max-acceleration` --
   ihre Werte stehen jetzt in robot.yaml.
 
-## 2026-08-19 (Altlasten)
+### Altlasten
 
 - **`rg6_control_sim` bildet nur noch die Oberflaeche der Bruecke nach.**
   Entfallen sind die Services `rg6_control/{open,close,grip,set_force_preset,
@@ -97,7 +103,7 @@ die Einbettung in den Onboard-Stack in
   Ohne das Paket sind sie nicht mehr abspielbar -- es ist die Typdefinition
   eines Archivs, keine Altlast.
 
-## 2026-08-19 (Nachlese zum URCap-Umbau)
+### Nachlese zum URCap-Umbau
 
 - **Der SRDF-Patch traegt wieder zwei `disable_collisions` — und ohne sie plant
   `move_group` gar nichts.** Der Patch hatte seine Eintraege am selben Tag
@@ -133,8 +139,6 @@ die Einbettung in den Onboard-Stack in
 - `ur_msgs` ist aus `package.xml`/`CMakeLists.txt` entfallen (die Abhaengigkeit
   gehoerte dem geloeschten Realtreiber); die Paketbeschreibung sagt jetzt, was
   das Paket noch enthaelt.
-
-## 2026-08-19
 
 - **Der SRDF-Patch ist halb so gross und nicht mehr schaedlich.** Er trug die
   Linknamen des ALTEN Greifermodells hart ein (`left_inner_knuckle`,
@@ -175,6 +179,19 @@ die Einbettung in den Onboard-Stack in
   dem UR-Flansch**; sein Fuss ist selbst die Kopplungsfläche (Ø 71 mm, an
   beiden Modellen am Mesh nachgemessen). Der Wert steht wieder auf `0 0 0`.
 
+---
+
+**Vor der Einführung von SemVer (2026-08-19)** wurde nach Datum
+geführt. Die Abschnitte darunter behalten ihre Datumsüberschrift — ihnen
+nachträglich Versionsnummern zu geben, würde eine Release-Historie
+erfinden, die es nicht gab.
+- **SemVer eingeführt.** Version auf `0.2.0`, dieses Changelog folgt
+  [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Tag `v0.2.0`.
+  Ältere Abschnitte behalten ihre Datumsüberschrift — ihnen nachträglich
+  Versionsnummern zu geben, würde eine Release-Historie erfinden.
+- **README nach dem Workspace-Schema** (readme.so): Features · Tech Stack ·
+  Installation · Usage · Running Tests · Related · Versioning · License. Die
+  vorhandene Prosa ist erhalten und unter den passenden Abschnitt gewandert.
 ## 2026-08-13
 
 - Die Trigger-Aliasse `rg6_control/open_gripper` und

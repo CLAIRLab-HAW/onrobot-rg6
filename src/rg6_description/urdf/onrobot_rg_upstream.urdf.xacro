@@ -212,11 +212,10 @@
           </geometry>
           <material name="onrobot/light_grey"/>
         </visual>
-        <collision>
-          <geometry>
-            <mesh filename="package://rg6_description/meshes/${model}/visual/finger_tip.stl"/>
-          </geometry>
-        </collision>
+        <!-- EINE Kollision, nicht zwei.  Upstream fuehrt diesen Block doppelt;
+             im kompilierten MuJoCo-Modell erschien der finger_tip dadurch mit
+             zwei identischen Kollisionsmeshes (2026-08-19 gemessen).  Das
+             kostet Kollisionspruefungen und bringt nichts. -->
         <collision>
           <geometry>
             <mesh filename="package://rg6_description/meshes/${model}/visual/finger_tip.stl"/>

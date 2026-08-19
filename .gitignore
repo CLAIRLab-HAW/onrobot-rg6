@@ -1,6 +1,8 @@
 # Created by https://www.toptal.com/developers/gitignore/api/ros2,c++,python,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=ros2,c++,python,macos
 
+docs/
+
 ### C++ ###
 # Prerequisites
 *.d

@@ -25,6 +25,9 @@
   (`finger_tip_1/2.stl`) statt einer gleichnamigen Datei — dieser eine Link
   behält das visuelle Mesh (2154 Dreiecke).
 * Treibergelenkname parametrisiert (s. Repo-CHANGELOG).
+* Der Link `finger_tip` fuehrte den `<collision>`-Block **doppelt**; im
+  kompilierten MuJoCo-Modell erschienen dadurch zwei identische
+  Kollisionsmeshes. Einer entfernt.
 * `config/rg6_v2.yaml`: `limit.upper` von **1.3** auf **1.25478** geklemmt.
   Bei 1,3 rad sind die Finger im Modell bereits durcheinander hindurch — die
   lichte Weite erreicht bei 1,25478 null und wächst danach wieder. Upstream

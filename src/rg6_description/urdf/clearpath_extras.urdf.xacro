@@ -65,20 +65,33 @@
          altes Modell, rpy 0 0 -1.5708 -> [-1  0  0]   (so sah es korrekt aus)
          neues Modell, rpy 0 0  0      -> [-1  0  0]   deckungsgleich
          neues Modell, rpy 0 0 -1.5708 -> [ 0 +1  0]   die 90 Grad
-       Wer hier wieder eine Drehung eintragen will, misst vorher nach. -->
+       Die Oeffnungsachse allein entscheidet das NICHT: sie ist eine Gerade,
+       [-1 0 0] und [+1 0 0] sind dieselbe, und welcher Finger im jeweiligen
+       Modell "1" heisst, ist willkuerlich.  0 und 180 Grad sind daran also
+       nicht unterscheidbar.  Der Owner hat am 2026-08-19 gesehen, dass ohne
+       Drehung 180 Grad fehlen; daher pi.  Wer es genauer will, misst an einem
+       UNSYMMETRISCHEN Merkmal (Kabelausgang, Sicherheitsschalter). -->
   <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg_upstream.urdf.xacro"/>
   <xacro:onrobot_rg parent="arm_0_tool0" prefix="rg6_" model="rg6_v2"
                     driver_joint="rg6_finger_joint">
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 3.14159"/>
   </xacro:onrobot_rg>
 
-  <!-- Alter Name, gleicher Ort.  rg6_onrobot_rg6_base_link ist der Bezugspunkt
-       des SRDF-Patches und der MuJoCo-Szenen; ihn hier zu erhalten kostet einen
-       leeren Link und spart eine Umbenennung in drei Repos. -->
+  <!-- Alter Name, GENAU alter Ort.  rg6_onrobot_rg6_base_link ist mehr als ein
+       Bezugspunkt fuer SRDF-Patch und MuJoCo-Szenen: die robot.yaml haengt die
+       KAMERA daran (camera_0_joint, xyz 0,023/0/0,125, rpy 0/-1,5708/-3,14).
+       Alles, was diesen Link verschiebt oder dreht, verschiebt die Kamera mit.
+
+       Erste Fassung haengte ihn an rg6_gripper_body; das sitzt 56,1 mm ueber
+       dem Flansch, die Kamera stand damit 56 mm zu hoch UND mitgedreht.  Er
+       haengt deshalb direkt an arm_0_tool0 und reproduziert exakt das alte
+       rg6_tool0_to_base: Ursprung am Flansch, rpy 0 0 -1,5708.  Damit ist er
+       vom Greifermodell ENTKOPPELT; wie dessen Mesh gedreht wird, ist eine
+       andere Frage und darf die Kamera nicht mehr anfassen. -->
   <link name="rg6_onrobot_rg6_base_link"/>
   <joint name="rg6_base_link_alias" type="fixed">
-    <parent link="rg6_gripper_body"/><child link="rg6_onrobot_rg6_base_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="arm_0_tool0"/><child link="rg6_onrobot_rg6_base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
   </joint>
 
   <!-- Greifer-TCP.  DERSELBE physische Punkt wie im alten Modell: 210 mm ueber

@@ -4,6 +4,24 @@ Was sich wann geändert hat. Der aktuelle Stand steht in der [README](README.md)
 die Einbettung in den Onboard-Stack in
 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
+## 2026-08-19
+
+- **Der Quick Changer sitzt wieder zwischen Flansch und Greifer.**
+  `rg6_tool0_to_base` stand auf `xyz="0 0 0"` — der ganze Greifer hing damit
+  19,6 mm zu hoch am Arm, und mit ihm sein TCP. Der Wert ist die Roboterseite
+  des Quick Changers für I/O (QC-Datenblatt v2.0); die Werkzeugseite steckt
+  schon im Mesh (unterste 20 mm von `base_link.stl`, Ø 71 mm). Der Owner hat
+  nachgesehen: zwischen Flansch und Greifer liegt nichts ausser einem
+  0,4-mm-Ring, der zum UR-Flansch gehört. Durch `xacro` verifiziert:
+  `arm_0_tool0 → rg6_hand_tcp` ist jetzt 229,6 mm statt 210,0.
+  **Zweitbeleg aus fremder Quelle:** im MIT-lizenzierten Modell
+  `onrobot_description` (rg6_v2, INRIA) reicht `body.stl` 19 mm unter seinen
+  eigenen Ursprung mit Ø 69,5 mm — dieselbe Scheibe, derselbe Bezugspunkt.
+  **Achtung:** `hrl` greift damit 19,6 mm zu hoch, bis der kalibrierte
+  `descend_offset` (0,065 gegen 0,045 in der Sim — ein Aufschlag von 20,0 mm,
+  der genau diesen Fehler bezahlt hat) zurückgenommen ist. Siehe ROBOTER-TODO
+  **R23**; die Rücknahme braucht einen Griff am Gerät.
+
 ## 2026-08-13
 
 - Die Trigger-Aliasse `rg6_control/open_gripper` und

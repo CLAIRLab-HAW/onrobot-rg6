@@ -15,9 +15,18 @@ Abweichung.
 
     xacro robot.urdf.xacro > /tmp/robot.urdf
     python3 derive_finger_kinematics.py /tmp/robot.urdf > scripts/rg6_finger_kinematics.json
+    python3 derive_finger_kinematics.py /tmp/robot.urdf --format cpp \\
+        > src/rg6_control/include/rg6_control/finger_kinematics.hpp
+
+Zwei Ausgabeformate, EINE Quelle.  Die Tabelle wird an zwei Stellen gebraucht,
+die einander nicht importieren koennen:  die Greiferbruecke auf dem Roboter
+liest sie als JSON, ``rg6_control_sim`` im Container braucht sie in C++.  Sie
+zweimal von Hand zu pflegen ist genau die Zweitfassung, vor der der Absatz
+oben warnt -- deshalb erzeugt dieses Skript beide.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import xml.etree.ElementTree as ET
@@ -80,7 +89,91 @@ def _pose(K, ziel, q):
     return T
 
 
-def main(urdf: str) -> int:
+HPP_KOPF = """\
+// ERZEUGT, NICHT GEPFLEGT -- tools/derive_finger_kinematics.py aus dem
+// generierten URDF des Greifermodells.  Nach jeder Aenderung am Modell neu
+// erzeugen; von Hand editierte Zahlen laufen still gegen den Roboter weg.
+//
+// Gelenkwinkel {joint} [rad] -> lichte Weite zwischen den Padflaechen
+// [m], gemessen zwischen den beiden flex_finger-Meshes.  Dieselbe Tabelle
+// liegt als JSON neben der Greiferbruecke auf dem Roboter
+// (husky-custom-setup/scripts/rg6_finger_kinematics.json) und im Roboterprofil
+// (robot_contract, gripper.linkage.table).
+//
+// Es gibt keine geschlossene Formel:  die Finger sind eine Viergelenkkette.
+// Die Vorgaengerfassung (rg6_control::linkage, Kurbelschwinge) gehoerte zum
+// ALTEN Greifermodell und lag mit dem rg6_v2 um mehr als 60 mm daneben.
+//
+// Obergrenze {qmax} rad = Nulldurchgang der Weite; darueber fahren die
+// Finger im Modell durcheinander hindurch.
+// Max. Interpolationsfehler gegen ein 400-Punkte-Gitter: {fehler_mm} mm.
+
+#ifndef RG6_CONTROL__FINGER_KINEMATICS_HPP_
+#define RG6_CONTROL__FINGER_KINEMATICS_HPP_
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+
+namespace rg6_control::finger_kinematics
+{{
+
+inline constexpr double kQMinRad = 0.0;
+inline constexpr double kQMaxRad = {qmax};
+
+//: Stuetzstellen (q [rad], Weite [m]), streng monoton fallend in der Weite.
+inline constexpr std::array<std::array<double, 2>, {n}> kTable = {{{{
+{zeilen}
+}}}};
+
+inline constexpr double kMaxWidthM = kTable.front()[1];
+inline constexpr double kMinWidthM = kTable.back()[1];
+
+//: Lichte Weite [m] beim Fingergelenk ``q`` [rad], linear interpoliert.
+inline double width_from_angle(double q)
+{{
+  const double x = std::clamp(q, kQMinRad, kQMaxRad);
+  for (std::size_t i = 1; i < kTable.size(); ++i) {{
+    if (x <= kTable[i][0]) {{
+      const double q0 = kTable[i - 1][0], w0 = kTable[i - 1][1];
+      const double q1 = kTable[i][0], w1 = kTable[i][1];
+      const double t = (q1 - q0) > 0.0 ? (x - q0) / (q1 - q0) : 0.0;
+      return w0 + t * (w1 - w0);
+    }}
+  }}
+  return kMinWidthM;
+}}
+
+//: Fingergelenk [rad] fuer die lichte Weite ``width_m``.  Die Weite wird auf
+//: den darstellbaren Bereich GEKLEMMT -- ein Befehl ueber den Hub hinaus ist
+//: gueltig und bedeutet "so weit wie es geht", nicht NaN.
+inline double angle_from_width(double width_m)
+{{
+  const double w = std::clamp(width_m, kMinWidthM, kMaxWidthM);
+  for (std::size_t i = 1; i < kTable.size(); ++i) {{
+    if (w >= kTable[i][1]) {{
+      const double q0 = kTable[i - 1][0], w0 = kTable[i - 1][1];
+      const double q1 = kTable[i][0], w1 = kTable[i][1];
+      const double t = (w0 - w1) > 0.0 ? (w0 - w) / (w0 - w1) : 0.0;
+      return q0 + t * (q1 - q0);
+    }}
+  }}
+  return kQMaxRad;
+}}
+
+}}  // namespace rg6_control::finger_kinematics
+
+#endif  // RG6_CONTROL__FINGER_KINEMATICS_HPP_
+"""
+
+
+def _als_hpp(tab, qmax, fehler) -> str:
+    zeilen = ",\n".join(f"  {{{{{q:.5f}, {w:.6f}}}}}" for q, w in tab)
+    return HPP_KOPF.format(joint=TREIBER, qmax=f"{qmax:.5f}", n=len(tab),
+                           zeilen=zeilen, fehler_mm=f"{fehler * 1000:.3f}")
+
+
+def main(urdf: str, fmt: str = "json") -> int:
     K, qmax = _kette(urdf)
     flaechen = sorted(n for n in K if n.endswith("flex_finger"))
     if len(flaechen) != 2:
@@ -97,6 +190,10 @@ def main(urdf: str) -> int:
     fein = np.linspace(0.0, qmax, 400)
     fehler = np.abs(np.array([weite(q) for q in fein])
                     - np.interp(fein, [t[0] for t in tab], [t[1] for t in tab])).max()
+
+    if fmt == "cpp":
+        sys.stdout.write(_als_hpp(tab, qmax, float(fehler)))
+        return 0
 
     json.dump({
         "kommentar": [
@@ -117,4 +214,10 @@ def main(urdf: str) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1]))
+    _p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    _p.add_argument("urdf", help="generiertes URDF mit dem Greifermodell")
+    _p.add_argument("--format", choices=("json", "cpp"), default="json",
+                    help="json = Tabelle fuer die Greiferbruecke (Vorgabe), "
+                         "cpp = Header fuer rg6_control_sim")
+    _a = _p.parse_args()
+    raise SystemExit(main(_a.urdf, _a.format))

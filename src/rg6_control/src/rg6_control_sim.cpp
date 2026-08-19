@@ -6,9 +6,11 @@
 //            rg6_control/set_force_preset, rg6_control/set_tool_power (SetBool)
 //   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
 //   Topic    rg6/state (rg6_msgs/GripperState)
-// und publiziert zusaetzlich die 6 Greifergelenke als joint_states (ersetzt den
+// und publiziert zusaetzlich das Treibergelenk als joint_states (ersetzt den
 // frueheren rg6_joint_state_broadcaster_sim) -> Modell animiert in RViz/Foxglove,
-// MoveIt-Integration ist damit komplett ohne Roboter testbar.
+// MoveIt-Integration ist damit komplett ohne Roboter testbar.  Die fuenf
+// Folgegelenke haengen im rg6_v2 per <mimic> am Treiber und werden von
+// robot_state_publisher und move_group selbst abgeleitet.
 //
 // Bewegungsmodell: Weite faehrt mit konstanter Geschwindigkeit auf die Zielweite.
 // Mit sim_object_width_m > 0 stoppt das Schliessen an der Objektweite ->
@@ -51,6 +53,7 @@
 
 #include "control_msgs/action/gripper_command.hpp"
 #include "rg6_control/analog_model.hpp"
+#include "rg6_control/finger_kinematics.hpp"
 #include "rg6_msgs/msg/gripper_state.hpp"
 #include "rg6_msgs/srv/grip.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
@@ -207,38 +210,47 @@ private:
 
   void publish_joints_locked()
   {
-    // Alle 6 Gelenke explizit (robot_state_publisher wertet <mimic> nicht aus;
-    // Faktoren wie in rg6_joint_state_broadcaster).
-    const double t = rg6_control::linkage::angle_from_width(width_);
-    const auto prefix = get_parameter("joint_prefix").as_string();
+    // NUR das Treibergelenk -- genau wie rg6_grip_bridge am echten Roboter.
+    //
+    // Bis 2026-08-19 standen hier sechs Gelenke, fuenf davon mit den Namen des
+    // alten Greifermodells (left_inner_knuckle_joint & Co.).  Die gibt es im
+    // rg6_v2 nicht mehr; seine Folgegelenke heissen finger_joint_mirror,
+    // gripper_finger_{1,2}_truss_arm_joint und _finger_tip_joint, und sie
+    // haengen alle per <mimic> am Treiber -- robot_state_publisher und
+    // move_group leiten sie selbst ab, ein zweiter Absender ist ueberfluessig.
+    //
+    // Und er war nicht bloss ueberfluessig:  ein RobotState, der einen der
+    // toten Namen traegt, bringt move_group ueber
+    // RobotModel::getVariableIndex zum ABSTURZ (std::terminate, SIGABRT -- am
+    // 2026-08-19 zweimal reproduziert).  Jeder Verbraucher, der joint_states
+    // liest und in eine MoveIt-Anfrage zurueckgibt, war damit eine
+    // Abschussrampe.
     sensor_msgs::msg::JointState msg;
     msg.header.stamp = get_clock()->now();
-    msg.name = {
-      prefix + "finger_joint",
-      prefix + "left_inner_knuckle_joint",
-      prefix + "left_inner_finger_joint",
-      prefix + "right_outer_knuckle_joint",
-      prefix + "right_inner_knuckle_joint",
-      prefix + "right_inner_finger_joint",
-    };
-    msg.position = {t, -t, t, -t, -t, t};
+    msg.name = {get_parameter("joint_prefix").as_string() + "finger_joint"};
+    msg.position = {angle_from_width(width_)};
     joint_pub_->publish(msg);
   }
 
-  // Weite <-> Fingergelenk kommen seit 2026-08-16 aus der GETRIEBEGEOMETRIE
-  // (rg6_control/linkage), nicht mehr aus einer Geraden zwischen zwei frei
-  // gesetzten Ankern.  Die alten Anker (angle_open 0.0, angle_closed 0.6)
-  // trafen weder das offene noch das geschlossene Ende: "ganz offen" stand
-  // fuer 93,7 mm statt 160 mm, "ganz zu" liess 4,3 mm Spalt.  Begruendung und
-  // Messreihe stehen bei ``rg6_control::linkage``.
+  // Weite <-> Fingergelenk kommen aus der Tabelle, die aus dem GENERIERTEN
+  // URDF des rg6_v2-Modells stammt (finger_kinematics.hpp, erzeugt von
+  // tools/derive_finger_kinematics.py).
+  //
+  // Bis 2026-08-19 stand hier ``rg6_control::linkage`` -- die Kurbelschwinge
+  // des ALTEN, selbstgebauten Greifermodells.  Sie hat zwei Dinge falsch
+  // gerechnet, und beide waren am laufenden Container messbar:  ihr q=0 liegt
+  // bei 93,4 mm statt bei den 153,2 mm des neuen Modells, und sie gibt fuer
+  // die ganz offene Hand -0,93766 rad zurueck -- ein Wert AUSSERHALB der
+  // Gelenkgrenzen des rg6_v2 (0,0 bis 1,25478).  Der Mock stellte den Greifer
+  // damit in eine Stellung, die es nicht gibt.
   static double angle_from_width(double width_m)
   {
-    return rg6_control::linkage::angle_from_width(width_m);
+    return rg6_control::finger_kinematics::angle_from_width(width_m);
   }
 
   static double width_from_angle(double angle)
   {
-    return rg6_control::linkage::width_from_angle(angle);
+    return rg6_control::finger_kinematics::width_from_angle(angle);
   }
 
   // Weite -> AI2-Spannung: der Weg, den nur der Sim geht.  Die Hardware misst

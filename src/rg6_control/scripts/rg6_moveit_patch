@@ -19,14 +19,13 @@ clearpath-custom-setup.py):
          (tiefstes arm_0-Mitglied; tool0 ist kein arm_0-Member, s. Kommentar am
          SRDF_FRAGMENT_TEMPLATE)
        + GENAU ZWEI <disable_collisions>: moment_arm<->finger_tip je Finger.
-       Die frueheren Eintraege des alten, selbstgebauten Greifermodells sind
-       entfallen -- sie trugen Linknamen, die es nicht mehr gibt. Der
+       Nur diese zwei: der
        moveit_collision_updater erzeugt mit dem rg6_v2-Modell 82 Greiferpaare
        selbst und korrekt benannt, aber diese beiden NICHT, und genau sie sind
        ueber den ganzen Hub in Kontakt (s. Kommentar am SRDF_FRAGMENT_TEMPLATE).
-  2. <setup>/manipulators/config/moveit.yaml wird NICHT mehr gepatcht, nur
-     noch GEPRUEFT. Seit dem 2026-08-19 stehen beide Eintraege in robot.yaml
-     unter manipulators.moveit.ros_parameters.move_group, und der Clearpath-
+  2. <setup>/manipulators/config/moveit.yaml wird NICHT gepatcht, nur
+     GEPRUEFT. Beide Eintraege stehen in robot.yaml unter
+     manipulators.moveit.ros_parameters.move_group, und der Clearpath-
      Generator schreibt sie selbst in moveit.yaml (deep-merge, empirisch
      verifiziert -- s. CHANGELOG):
        + moveit_simple_controller_manager: GripperCommand-Controller
@@ -76,8 +75,8 @@ MARKER_END = "<!-- onrobot-rg6:END -->"
 # Muss zu rg6_control/rg6_joint_state_broadcaster passen (0 = offen, + = zu)
 # und zu den Gelenknamen aus rg6_description (Praefix 'rg6_').
 #
-# Die 5 Folgegelenke stehen als <joint> IN der gripper-Gruppe (frueher nur
-# top-level <passive_joint>): MoveIt nimmt in addJointModelGroup NUR explizit
+# Die 5 Folgegelenke stehen als <joint> IN der gripper-Gruppe, nicht als
+# top-level <passive_joint>: MoveIt nimmt in addJointModelGroup NUR explizit
 # gelistete Joints/Links/Chains/Subgroups in die Gruppe auf - es gibt KEIN
 # Auto-Add von mimic-Abhaengigen. Erst als Gruppenmitglied werden sie vom
 # JointModelGroup-Konstruktor anhand des URDF-<mimic> (getMimic()!=nullptr) als
@@ -228,8 +227,8 @@ def patch_srdf(path, args):
 def verify_moveit_yaml(path, args):
     """Pruefen (NICHT patchen), ob robot.yaml die MoveIt-Greiferwerte geliefert hat.
 
-    Beide Eintraege kommen seit dem 2026-08-19 aus robot.yaml durch den
-    Clearpath-Generator. Faellt einer weg -- alte robot.yaml, vertippter Key,
+    Beide Eintraege kommen aus robot.yaml durch den Clearpath-Generator.
+    Faellt einer weg -- alte robot.yaml, vertippter Key,
     Generator ohne den Merge --, dann startet move_group klaglos und der
     Greifer ist erst dann als fehlend zu erkennen, wenn ein GripperCommand-Goal
     ins Leere laeuft. Diese Pruefung macht daraus eine sichtbare Meldung.
@@ -316,10 +315,10 @@ def main():
                         help="Parent-Link des EE - MUSS ein Mitglied der parent_group "
                              "sein (default: arm_0_wrist_3_link; NICHT arm_0_tool0, da "
                              "tool0 kein Mitglied der joint-basierten arm_0-Gruppe ist)")
-    # Aus der Getriebegeometrie (rg6_control/analog_model.hpp, namespace
-    # linkage), nicht geschaetzt: die frueheren 0.0 / 0.6 backten eine halb
-    # offene und eine nicht ganz geschlossene Hand als SRDF-Gruppenzustaende
-    # "open"/"close" ein.
+    # Aus der Getriebekinematik des rg6_v2 (finger_kinematics.hpp, erzeugt von
+    # tools/derive_finger_kinematics.py), nicht geschaetzt.  Geschaetzte
+    # Endwerte backen eine halb offene und eine nicht ganz geschlossene Hand
+    # als SRDF-Gruppenzustaende "open"/"close" ein.
     parser.add_argument("--angle-open", default="0.0",
                         help="rg6_finger_joint-Winkel 'open' -- groesste "
                              "darstellbare Weite, 153,2 mm (default: 0.0)")

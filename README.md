@@ -1,81 +1,67 @@
 # onrobot-rg6
 
-ROS 2 driver and robot description for the **OnRobot RG6** gripper mounted on a
-**Universal Robots** arm (CB3) and controlled through the UR controller's
-**tool interface** (no OnRobot Compute Box, URCap **off**).
+Robot description, MoveIt glue and container mock for the **OnRobot RG6**
+gripper on a **Universal Robots** arm (CB3) of the Clearpath Husky `a200-0553`.
 
-The driver exposes **all functions the RG6 hardware offers** over that
-interface:
+**This repository does not drive the real gripper.** On the robot the RG6 is
+commanded by **`rg6_grip_bridge`** (onboard, Python, in
+[`husky-custom-setup`](../husky-custom-setup/scripts/rg6_grip_bridge.py)) over
+**XML-RPC against the OnRobot URCap**. What lives here is everything around
+that: the measured model, the MoveIt wiring, the `joint_states` plumbing, and a
+mock that offers the same surface without hardware.
 
-| RG6 hardware function | Channel | ROS interface |
-|---|---|---|
-| Open / close to preset width | Tool-DO0 level (`set_io` pin 16) | `rg6_control/open`, `rg6_control/close` (`std_srvs/Trigger`) |
-| Force preset select (low/high) | Tool-DO1 level (`set_io` pin 17) | `rg6_control/set_force_preset` (`std_srvs/SetBool`) |
-| **Target width + force** (0–160 mm, 25–120 N) | 17-bit word clocked on Tool-DO0/DO1 (OnRobot URCap protocol) via **URScript injection** | `rg6_control/grip` (`rg6_msgs/Grip`) |
-| Width feedback | Tool-AI2 (analog) | `rg6/state.width` [m], joint_states animation |
-| Force/current feedback | Tool-AI3 (analog) | `rg6/state.force_raw` |
-| **Grip detected** (object grasped) | Tool-DI0 | `rg6/state.grip_detected`, action result `stalled` |
-| **Busy/ready** (motion running) | Tool-DI1 (inverted) | `rg6/state.busy`, robust motion-done detection |
-| Gripper power | Tool voltage 24 V (`set_io` fun 4) | `rg6_control/set_tool_power` (`std_srvs/SetBool`), auto-on at startup |
-| **MoveIt** | — | `rg6_gripper_controller/gripper_cmd` (`control_msgs/GripperCommand` action) + `rg6_moveit_patch` |
+## The canonical interface
 
-Not offered by this hardware generation (documented for completeness): a *stop*
-command and direct RS485/Modbus access (CB3 has no Tool Communication
-Interface). Depth compensation is an arm motion feature of the URCap, not a
-gripper function — do it in MoveIt if needed.
+Both stages — real robot and offboard container — serve the **same names**, so
+a caller never branches on which one it is talking to:
 
----
+| What | Name (relative to `<ns>`) | Type | Served by |
+|---|---|---|---|
+| Command | `rg6_gripper_controller/gripper_cmd` | `control_msgs/action/GripperCommand` | `rg6_grip_bridge` (robot) · `rg6_control_sim` (container) |
+| State | `rg6/bridge_state` | `std_msgs/String` (flat JSON) | same |
+| Model animation | `manipulators/endeffectors/joint_states` | `sensor_msgs/JointState` | same |
+
+`<ns>` is `/a200_0553/manipulators`.
+
+* **`command.position` is the joint value in rad**, not the width: `0.0` open,
+  `1.25478` closed. Both receivers convert it through the same gear table (see
+  [Width ↔ joint](#width--joint)).
+* **`max_effort` is the grip force in N**, clamped to 25…120.
+* `rg6/bridge_state` carries `width_m`, `busy`, `grip_detected`, `status`,
+  `safety_failed`, `last_command`. It is JSON in a `std_msgs/String` rather
+  than a typed message so that consumers need nothing from `rg6_msgs`.
+
+> **Read the state topic before claiming anything about the gripper.** A
+> `GripperCommand` result acknowledges that the goal was *accepted*; the width
+> reached is what `bridge_state` reports afterwards. `rg6_grip_bridge` takes
+> **one command at a time** and rejects a second one while moving.
 
 ## How it works
 
 ```
-                        this package                        UR driver (ur_robot_driver)
- open/close/preset  ──► rg6_control ──set_io─────────────►  io_and_status_controller ──► Tool-DO0/DO1 ─► RG6
- grip(width,force)  ──► rg6_control ──URScript-Injektion─►  urscript_interface (:30001) ─► 17-bit word ─► RG6
- rg6/state, action  ◄── rg6_control ◄─tool_data/io_states◄─ io_and_status_controller ◄── Tool-AI2/AI3, DI0/DI1
- joint_states       ◄── rg6_joint_state_broadcaster ◄─tool_data
+                  this repository                    husky-custom-setup / UR
+  MoveIt, plan_server ──gripper_cmd──▶  rg6_grip_bridge ──XML-RPC──▶ OnRobot URCap ─▶ RG6
+                                        rg6/bridge_state  ◀──getters──┘
+  RViz / Foxglove     ◀──joint_states── rg6_grip_bridge (5 Hz)
+
+  container, no hardware:
+  MoveIt, plan_server ──gripper_cmd──▶  rg6_control_sim  ──▶ same two topics
 ```
 
-- **Level commands** (`open`/`close`): set Tool-DO0 via `set_io`, then wait for
-  motion end — primarily via the RG6 **ready signal** (Tool-DI1 from
-  `io_states`), falling back to the analog **settle criterion** on Tool-AI2.
-  Clamping onto an object (position stable, force high) is reported as
-  **success**, and `grip_detected` (Tool-DI0) is included in the response.
-- **`grip` (target width/force)**: the RG6's full command set is only reachable
-  through the OnRobot 17-bit protocol clocked on Tool-DO0 (clock) / Tool-DO1
-  (data, inverted, MSB first): `rg_data = floor(width_mm)*4 +
-  floor(force_n/2)*4*161`. The timing is `sync()`-cycle based and cannot be met
-  through `set_io` service calls, so `rg6_control` generates the documented
-  URScript (community-verified for RG2; RG6 constants parametrized) and
-  **injects** it via the `urscript_interface` node.
-  **This replaces the running ExternalControl program**; the driver
-  automatically calls `io_and_status_controller/resend_robot_program`
-  afterwards (`resend_program_after_grip`).
-- **`rg6_joint_state_broadcaster`** maps Tool-AI2 to the model's driving joint
-  `rg6_finger_joint` (+ 5 follower joints published explicitly as a fallback for
-  older `robot_state_publisher`/parsers without `<mimic>` support and for
-  live-tuning of the AI2 mapping; values are identical to the URDF `<mimic>`
-  multipliers, which the jazzy RSP and MoveIt now evaluate directly).
-- **Simulation** (`rg6_control_sim`): identical ROS surface (services, `grip`,
-  action, `rg6/state`) without hardware; publishes the 6 gripper joints itself.
-  `sim_object_width_m` emulates an object (close stops there → `grip_detected`).
-
-> **Important:** the UR `io_and_status_controller` must be running (provides
-> `set_io`, `tool_data`, `io_states`, `resend_robot_program`), and the RG6 must
-> be wired to the UR tool connector. The OnRobot **URCap must stay off**
-> (RTDE conflict with `ur_robot_driver`).
-
----
+The URCap is an RTDE client itself and occupies `tool_digital_output_mask`, so
+`ur_robot_driver` runs on an **input recipe without the
+`tool_digital_output*` lines**. ROS therefore cannot set a tool DO at all —
+which is why the gripper is commanded through the URCap and not through the
+UR tool interface.
 
 ## Packages
 
 | Package | Type | Contents |
 |---|---|---|
-| `rg6_control` | `ament_cmake` (C++) | `rg6_control` (driver), `rg6_control_sim`, `rg6_joint_state_broadcaster`, `joint_state_relay`, `joint_state_aggregator`, launch files, `config/rg6_params.yaml`, `scripts/rg6_moveit_patch` |
-| `rg6_msgs` | interfaces | `msg/GripperState`, `srv/Grip` |
-| `rg6_description` | `ament_cmake` | URDF/Xacro, meshes, Clearpath extras glue |
-
----
+| `rg6_description` | `ament_cmake` | the measured **RG6 v2** model: URDF/Xacro, visual + collision meshes, `config/rg6_v2.yaml`, Clearpath extras glue (`clearpath_extras.urdf.xacro`) |
+| `rg6_control` | `ament_cmake` (C++) | `rg6_control_sim` (container mock), `joint_state_relay`, `joint_state_aggregator`, `joint_states.launch.py`, `scripts/rg6_moveit_patch`, `include/rg6_control/finger_kinematics.hpp` |
+| `rg6_msgs` | interfaces | `msg/GripperState`, `srv/Grip` — **archive types only.** No running node uses them; they are kept because the recordings in `clearpath/data/recordings/` contain `rg6/state` of that type and would otherwise be unplayable. |
+| `tools/` | — | `derive_finger_kinematics.py`: regenerates the gear table from the URDF |
 
 ## Build
 
@@ -86,221 +72,155 @@ colcon build --packages-select rg6_description rg6_msgs rg6_control
 source install/setup.bash
 ```
 
----
-
 ## Run
 
-### On real hardware
-The nodes use **relative** names — launch them in the **same namespace as the
-UR `io_and_status_controller`** (Clearpath: `/a200_0553/manipulators`):
+### Container / simulation (no hardware)
+
+`rg6_control_sim` offers the canonical interface above and publishes the
+driving joint itself, so the whole MoveIt integration is testable without a
+robot. The five follower joints hang off the driver via `<mimic>` in the
+`rg6_v2` model and are derived by `robot_state_publisher` and `move_group`.
 
 ```bash
-ros2 launch rg6_control rg6_bringup.launch.py
-# args: params_file:=...  start_urscript_interface:=true  robot_ip:=192.168.131.40
+ros2 run rg6_control rg6_control_sim --ros-args -r __ns:=/a200_0553/manipulators
+# emulate an object: -p sim_object_width_m:=0.05
+#   closing stops at that width -> grip_detected=true (like the real Tool-DI0)
 ```
 
-### Examples
+Motion model: the width travels to the target at constant speed. What this
+does *not* reproduce are the real RG6 pathologies — a success from this node is
+marked as non-hardware truth through the `source` field in `/twin/result`.
 
-```bash
-NS=/a200_0553/manipulators
-ros2 service call $NS/rg6_control/close std_srvs/srv/Trigger
-ros2 service call $NS/rg6_control/open  std_srvs/srv/Trigger
-# target width 80 mm at 60 N (URScript injection, restores ExternalControl):
-ros2 service call $NS/rg6_control/grip rg6_msgs/srv/Grip "{width: 0.08, force: 60.0, wait: true}"
-# force preset (level mode) high/low:
-ros2 service call $NS/rg6_control/set_force_preset std_srvs/srv/SetBool "{data: true}"
-# gripper power:
-ros2 service call $NS/rg6_control/set_tool_power std_srvs/srv/SetBool "{data: false}"
-# state:
-ros2 topic echo $NS/rg6/state
-```
+### Real robot
 
-### Simulation (no hardware)
+Nothing in this repository is started for the gripper. `rg6_grip_bridge` runs
+as `clearpath-custom-rg6-grip-bridge`, installed by
+[`husky-custom-setup`](../husky-custom-setup/). Command it through the action
+above.
 
-```bash
-ros2 launch rg6_control rg6_control.launch.py gripper_sim:=true
-# object in the gripper: -p sim_object_width_m:=0.05 (via params or node args)
-```
+### joint_states plumbing (`joint_states.launch.py`)
 
----
+On a multi-controller-manager Clearpath, wheel, arm and gripper joint states
+come from **three** separate sources and are not merged automatically:
 
-## ROS API (`rg6_control` node)
-
-| Interface | Name (relative) | Type |
-|---|---|---|
-| Service | `rg6_control/open` | `std_srvs/srv/Trigger` |
-| Service | `rg6_control/close` | `std_srvs/srv/Trigger` |
-| Service | `rg6_control/grip` | `rg6_msgs/srv/Grip` |
-| Service | `rg6_control/set_force_preset` | `std_srvs/srv/SetBool` |
-| Service | `rg6_control/set_tool_power` | `std_srvs/srv/SetBool` |
-| Action | `rg6_gripper_controller/gripper_cmd` | `control_msgs/action/GripperCommand` |
-| Publisher | `rg6/state` | `rg6_msgs/msg/GripperState` |
-| Publisher | `urscript_interface/script_command` | `std_msgs/msg/String` |
-| Client | `io_and_status_controller/set_io` | `ur_msgs/srv/SetIO` |
-| Client | `io_and_status_controller/resend_robot_program` | `std_srvs/srv/Trigger` |
-| Subscriber | `io_and_status_controller/tool_data` | `ur_msgs/msg/ToolDataMsg` |
-| Subscriber | `io_and_status_controller/io_states` | `ur_msgs/msg/IOStates` |
-
-`rg6_joint_state_broadcaster`: `tool_data` → `joint_states`
-(`rg6_finger_joint` + 5 followers; remap `joint_states` to your bus).
-
----
+* **`joint_state_aggregator`** builds one complete `/a200_0553/joint_states`
+  (with velocity + effort) for recording and Foxglove — deliberately *not* in
+  the live TF path, where an aggregator would be a single point of failure.
+* **`joint_state_relay`** mirrors `manipulators/joint_states` and
+  `manipulators/endeffectors/joint_states` back onto
+  `platform/joint_states`, which Clearpath's `robot_state_publisher` and
+  `move_group` subscribe to. It is a node of its own rather than
+  `topic_tools relay` because it publishes with **explicitly RELIABLE** QoS —
+  `move_group` subscribes RELIABLE, and a best-effort publisher would never
+  reach it (state displayed correctly, planning failing).
 
 ## MoveIt
 
-MoveIt talks to the gripper through the standard **GripperCommand** pipeline:
+MoveIt talks to the gripper through the standard **GripperCommand** pipeline.
+Clearpath regenerates `robot.srdf` and `moveit.yaml` on **every boot** and
+knows nothing about OnRobot grippers, so the two halves are supplied
+differently:
 
-1. **SRDF**: planning group `gripper` (joint `rg6_finger_joint`), end effector
-   `rg6` at `arm_0_wrist_3_link` (parent_group `arm_0` — `arm_0_tool0` is not a
-   member of the joint-based `arm_0` group, so the EE would not attach), named
-   states `open` (0.0) / `close` (0.6), the 5 follower joints listed as
-   `<joint>` in the `gripper` group (driven from `rg6_finger_joint` via the
-   URDF `<mimic>` tags).
-2. **moveit.yaml**: `moveit_simple_controller_manager` entry
-   `manipulators/rg6_gripper_controller` (type `GripperCommand`, action_ns
-   `gripper_cmd`, `max_effort` 60 N) + `joint_limits` for `rg6_finger_joint`
-   (TOTG needs acceleration limits). These are **not patched** — they live in
-   `robot.yaml` under `manipulators.moveit.ros_parameters.move_group`, and
-   Clearpath's `generate_param` deep-merges them into the generated
-   `moveit.yaml` itself.
-3. **Action server**: `rg6_control` serves
-   `<ns>/rg6_gripper_controller/gripper_cmd`. Goal positions at the endpoints
-   (± `action_endpoint_angle_tol`) use the robust level command; intermediate
-   widths use the URScript grip (force = goal `max_effort`).
-   **Grasp semantics**: clamping on an object returns `stalled: true` +
-   **SUCCEEDED** — exactly what MoveIt pick pipelines expect.
+**`moveit.yaml` comes from `robot.yaml`** — no patching. Under
+`manipulators.moveit.ros_parameters.move_group` sit the
+`moveit_simple_controller_manager` entry `manipulators/rg6_gripper_controller`
+(type `GripperCommand`, action_ns `gripper_cmd`) and the
+`robot_description_planning.joint_limits.rg6_finger_joint` block that TOTG
+needs. Clearpath's `generate_param` deep-merges them into the generated file.
 
-Clearpath generates `robot.srdf`/`moveit.yaml` fresh **on every boot** and
-knows nothing about OnRobot grippers, so this repo ships an idempotent patch
-tool that runs **after generation, before move_group starts**:
+**`robot.srdf` has no such hook** and is patched:
 
 ```bash
-rg6_moveit_patch --setup-path /etc/clearpath   # robot (called by clearpath-custom-setup)
-rg6_moveit_patch --setup-path /clearpath       # offboard container (called by entrypoint)
+rg6_moveit_patch --setup-path /etc/clearpath   # robot (clearpath-custom-setup)
+rg6_moveit_patch --setup-path /clearpath       # offboard container (entrypoint)
 ```
 
-It edits **`robot.srdf` only** (marker-framed block, updates in place), with a
-`.bak` backup and an atomic write, and then **verifies** that the moveit.yaml
-values from `robot.yaml` arrived — exit code 1 and a pointer to the SSOT if
-they did not, so a stale `robot.yaml` shows up at boot instead of at the first
-gripper goal. The RG6 **collision pairs** need no patching: Clearpath's
-`moveit_collision_updater` sees the full URDF including `platform.extras` and
-already emits them.
+The tool writes a marker-framed block into `robot.srdf` only — atomically, with
+a `.bak`, idempotent — containing the planning group `gripper`
+(joint `rg6_finger_joint`), the group states `open` (0.0) and `close`
+(1.25478), the end effector `rg6` (`parent_link` `arm_0_wrist_3_link`,
+`parent_group` `arm_0`) and exactly two `<disable_collisions>` pairs
+(`moment_arm` ↔ `finger_tip`, per finger) that Clearpath's
+`moveit_collision_updater` does not find on its own.
 
-Why the split: `robot.yaml` has **no SRDF hook at all** — `clearpath_config`
-contains no occurrence of the string `srdf`, `robot.srdf.xacro` is generated
-purely from the arms/grippers/lifts loops, and `Gripper.MODEL` is a closed
-enum (`franka_gripper`, `kinova_2f_lite`, `robotiq_2f_140`, `robotiq_2f_85`)
-that rejects an RG6 entry with a `ValueError`. The moveit.yaml side, by
-contrast, is plain `ros_parameters` and needs no tool.
+`parent_group="arm_0"` is required: `RobotModel::buildGroupsInfoEndEffectors`
+demands `hasLinkModel(parent_link)` on the parent group, and `arm_0_tool0` is
+not a member of the joint-based `arm_0` group.
 
-Hooked up in:
-- `husky-custom-setup/install-clearpath-custom-setup.sh` → per-boot patcher
-  step 4 (`run_rg6_moveit_patch`, before `clearpath-manipulators.service`),
-- `husky-offboard/entrypoint.sh` → after the `generate_*` runs.
+Afterwards **`verify_moveit_yaml`** checks that the values from `robot.yaml`
+actually arrived. If they did not — a stale `robot.yaml` under `/etc/clearpath`
+or from `ROBOT_YAML_URL` — it lists every missing key, names the SSOT and exits
+**1**, so the case shows up at boot instead of at the first gripper goal. No
+caller aborts on it; installer and offboard entrypoint log the code.
 
-Usage from MoveIt (named targets or joint goals on group `gripper`):
+Why there is no `robot.yaml` route for the SRDF: `clearpath_config` contains
+the string `srdf` nowhere, there is no counterpart to `platform.extras.urdf`,
+`robot.srdf.xacro` is generated purely from the arms/grippers/lifts loops, and
+`Gripper.MODEL` is a closed enum (`franka_gripper`, `kinova_2f_lite`,
+`robotiq_2f_140`, `robotiq_2f_85`) that rejects an RG6 entry with a
+`ValueError`.
+
+Using it:
 
 ```python
-group = MoveGroupCommander("gripper")          # via moveit_commander / move_group API
-group.set_named_target("close"); group.go()    # stops+succeeds on object contact
+group = MoveGroupCommander("gripper")
+group.set_named_target("close"); group.go()    # stops and succeeds on contact
 ```
 
 RViz: MotionPlanning panel → Planning Group `gripper` → Goal State
 `open`/`close` → Plan & Execute.
 
-> Display note: the URDF carries `<mimic>` tags (official OnRobot multipliers),
-> so RViz/MoveIt previews animate all fingers from `rg6_finger_joint`; the
-> `rg6_joint_state_broadcaster` additionally publishes the 5 followers
-> explicitly as a fallback for parsers that ignore `<mimic>`.
+## Width ↔ joint
 
-### Valid width feedback without a manual warm-up
+The RG6 linkage is not linear, so the mapping between the driving joint
+`rg6_finger_joint` [rad] and the clear width between the pad faces [m] is a
+**generated table**, not a formula:
 
-The RG6 only drives its width analog line (Tool-AI2) **after it has received its
-first motion command** since power-on; before that AI2 reads ~0 V. Two mechanisms
-keep this from breaking the state and MoveIt:
+* `husky-custom-setup/scripts/rg6_finger_kinematics.json` — joint limits
+  `0.0 … 1.25478` rad, maximum interpolation error `4.7e-05` m. The width is
+  measured between the two `flex_finger` meshes.
+* Regenerate it from the URDF after **every** change to the gripper model:
+  `tools/derive_finger_kinematics.py`. The table is generated, not maintained
+  by hand — a stale table is a visible file with a date rather than a silent
+  drift.
+* The upper joint limit is the zero crossing of the width; beyond it the
+  fingers pass through each other in the model and the width grows again.
+* `include/rg6_control/finger_kinematics.hpp` is the C++ reader used by
+  `rg6_control_sim`, so mock and bridge interpolate the same table.
 
-- **`rg6_control` auto-prime** (`prime_on_ready`, default `true`): on the **rising
-  edge of `robot_program_running`** (ExternalControl becomes active — at boot *or*
-  when the arm is powered up late) `rg6_control` sets the tool voltage and issues
-  one **open** command, so AI2 becomes valid immediately. Runs **once per power-on**
-  (reset on `set_tool_power false`) — the ExternalControl restart after a URScript
-  `grip` does **not** re-open (would drop a grasped object). Delay after powering:
-  `prime_settle_s` (default 1.0 s).
-- **`rg6_joint_state_broadcaster` dead-zone gate** (`dead_input_threshold`, default
-  0.2 V): AI2 **below** this is treated as “no valid feedback" and the last good
-  angle is **held** instead of being mapped to a fake `closed`. Without it, the 0 V
-  pre-command reading clamps to `angle_closed` → wrong displayed state **and** a
-  poisoned MoveIt start state (planning from the fake value → the gripper can't be
-  moved in MoveIt). Must sit below the closed voltage `in_closed` (0.56 V).
+The width the device reports is **larger than the jaws actually are**, by
++3…+5 mm depending on direction and with ~1.7 mm of hysteresis. **The
+commanded value is the reference, not the reported one.**
 
----
-
-## Calibration
-
-All values are **live ROS parameters** (`ros2 param set`, persist them in
-`config/rg6_params.yaml`).
-
-### Analog width (Tool-AI2 → m)
-Watch `io_and_status_controller/tool_data` while opening/closing and set:
-`width_in_open`/`width_in_closed` (volts at the ends) —
-`width_open_m`/`width_closed_m` default to the RG6 stroke (0.160/0.0).
-The same volt endpoints drive the joint animation
-(`rg6_joint_state_broadcaster`: `in_open`/`in_closed`, `angle_open`/`angle_closed`).
-
-### Motion detection (fallback without `io_states`)
-`force_threshold`, `move_eps`, `settle_eps`, `settle_time_s`,
-`motion_timeout_s` — as before; only used when Tool-DI feedback is unavailable.
-
-### 17-bit grip protocol (**verify once against the device!**)
-The encoding is community-verified for the **RG2**
-(`width*4 + floor(force/2)*4*111`, [python-urx PR#35](https://github.com/SintefManufacturing/python-urx/pull/35)).
-For the RG6 the driver parametrizes it with datasheet ranges — validate on the
-robot before productive use:
-
-| Parameter | Default | Meaning |
-|---|---|---|
-| `grip_max_width_mm` | 160 | RG6 stroke |
-| `grip_min_force_n` / `grip_max_force_n` | 25 / 120 | RG6 force range |
-| `rg_width_steps` | 161 | encoding multiplier (= max width + 1; RG2: 111) |
-| `rg_force_divisor` | 2 | force quantization |
-| `rg_slave` / `rg_slave_flag` | false / 16384 | second gripper (dual mount) |
-
-Validation procedure (hand on the e-stop, workspace clear):
-1. `ros2 service call .../grip "{width: 0.08, force: 40, wait: true}"`
-2. compare commanded vs. measured width (`rg6/state.width`, caliper).
-3. If the gripper moves to a wrong width, adjust `rg_width_steps` /
-   `rg_force_divisor`; if it doesn't react at all, the unit may not accept the
-   protocol without prior URCap provisioning — keep using level mode
-   (`grip_backend: io` rejects `grip` cleanly).
-
----
+Tool-AI2/AI3 are *not* a width source. The raw voltages remain on
+`io_and_status_controller/tool_data` and answer a different question — whether
+the tool connector has power at all. AI2 has been measured as mis-calibrated by
+up to 17 mm and is not a second opinion.
 
 ## Using it on the Clearpath Husky (a200-0553)
 
-Unchanged from before: workspace in `system.ros2.workspaces`,
-`io_and_status_controller` via `robot.yaml` `ros_parameters`, visual model via
-`platform.extras.urdf` (`clearpath_extras.urdf.xacro`), autostart via
-`clearpath-custom-rg6-bringup.service` (now also starts `urscript_interface`). The gripper
-publishes joint states on `manipulators/endeffectors/joint_states`; the
-`joint_state_relay` mirrors them (RELIABLE) onto `platform/joint_states` for
-`robot_state_publisher` + `move_group`, and `joint_state_aggregator` builds the
-full `/a200_0553/joint_states` snapshot for recording.
-
----
+Workspace in `system.ros2.workspaces`, `io_and_status_controller` via
+`robot.yaml` `ros_parameters`, visual model via `platform.extras.urdf`
+(`clearpath_extras.urdf.xacro`). The gripper publishes joint states on
+`manipulators/endeffectors/joint_states`.
 
 ## Safety
 
-- Calling the services moves real hardware — keep the workspace clear, hand on
-  the e-stop, especially while calibrating.
-- `grip` (URScript injection) **interrupts ExternalControl**: never call it
-  while an arm trajectory is executing. The driver restores the program via
-  `resend_robot_program`; if that fails, run
-  `ur_state_manager/ensure_ready`.
-- After `set_tool_power {data: false}` the gripper is unpowered; analog/DI
-  feedback is meaningless until re-powered.
+* A `GripperCommand` goal moves real hardware — keep the workspace clear and a
+  hand on the e-stop.
+* The bridge rejects a second command while one is running. Do not paper over
+  that with a retry loop; wait for `busy` to fall **and** for the width to
+  settle.
+* `busy` still reads `false` for roughly 0.4 s after a command is accepted. A
+  loop that only waits for the end of the motion returns immediately in that
+  gap — wait for both edges.
 
----
+## History
+
+What changed when is in [CHANGELOG.md](CHANGELOG.md) — including the
+2026-08-19 handover from the tool-DO driver to the URCap bridge, which removed
+`rg6_control` (the driver), `rg6_joint_state_broadcaster`, the
+`rg6_control/*` services, the `rg6/state` topic and the AI2 model.
 
 ## License
 

@@ -4,6 +4,36 @@ Was sich wann geändert hat. Der aktuelle Stand steht in der [README](README.md)
 die Einbettung in den Onboard-Stack in
 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
+## 2026-08-19 (README auf den Ist-Zustand)
+
+- **Die README beschrieb noch den geloeschten Tool-DO-Treiber.** Sie fuehrte
+  neun `rg6_control/*`-Services, das Topic `rg6/state`, den
+  `rg6_joint_state_broadcaster`, die AI2-Kennlinie samt Kalibrierverfahren, das
+  17-Bit-URScript-Protokoll und `rg6_bringup.launch.py` als aktuellen Stand --
+  und schrieb im ersten Absatz vor, die OnRobot-URCap muesse **aus** bleiben,
+  waehrend genau sie der Steuerweg ist. Alle Beispielaufrufe zeigten auf
+  Schnittstellen, die es nicht mehr gibt.
+
+  Neu geschrieben auf das, was das Repo heute ist: Modell (`rg6_description`),
+  MoveIt-Anbindung (`rg6_moveit_patch` + robot.yaml), joint_states-Verrohrung
+  und Container-Mock (`rg6_control_sim`) -- mit dem ausdruecklichen Hinweis,
+  dass der reale Greifer von `rg6_grip_bridge` in husky-custom-setup
+  kommandiert wird. Die kanonische Schnittstelle (Action `gripper_cmd`,
+  Zustand `rg6/bridge_state`, Gelenkwert in rad statt Weite) steht jetzt ganz
+  oben, weil sie auf beiden Stufen dieselbe ist.
+- **Historische Bezuege aus den Quellkommentaren entfernt.** Was einmal war,
+  steht in dieser Datei; im Quelltext stand es doppelt. Betroffen:
+  `rg6_control_sim.cpp` (der "AM 2026-08-19 ZURUECKGESCHNITTEN"-Block,
+  dreimal "Bis 2026-08-19 stand hier ..."), `joint_states.launch.py`,
+  `CMakeLists.txt`, `package.xml`, `rg6_moveit_patch`, `rg6_v2.yaml`.
+  Die Warnungen selbst sind geblieben, nur ohne Datum und Vorgeschichte --
+  etwa dass ein RobotState mit einem modellfremden Gelenknamen `move_group`
+  ueber `getVariableIndex` zum Absturz bringt.
+- **Ein toter Verweis dabei gefunden:** `rg6_moveit_patch` begruendete seine
+  Endwinkel mit `rg6_control/analog_model.hpp` -- die Datei ist mit dem
+  Analogmodell entfallen. Die Werte kommen aus `finger_kinematics.hpp`.
+- Gemessene Zahlen behalten ihr Datum. Sie sagen, wie frisch der Wert ist.
+
 ## 2026-08-19 (moveit.yaml zurueck an robot.yaml)
 
 - **`rg6_moveit_patch` patcht nur noch die SRDF und prueft den Rest.** Die

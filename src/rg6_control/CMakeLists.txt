@@ -59,12 +59,10 @@ install(PROGRAMS scripts/rg6_moveit_patch
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# BUILD_TESTING: hier steht nichts mehr.  Der einzige Test war
-# test_analog_model -- die Kennlinie Greifweite <-> Tool-AI2-Spannung, ein
-# Kanal, den es seit dem 2026-08-19 nicht mehr gibt (der RG6 haengt an der
-# OnRobot-URCap, nicht am Tool-Anschluss).  Er ist mit dem Modell entfallen.
-# Was der Greifer im Container tut, prueft jetzt eine E2E gegen den laufenden
-# Stack: plan-bridge/tests/test_offboard_gripper.py.
+# BUILD_TESTING: hier steht nichts.  Der RG6 haengt an der OnRobot-URCap, nicht
+# am Tool-Anschluss -- es gibt keine Kennlinie und kein Analogmodell mehr, die
+# sich hier pruefen liessen.  Was der Greifer im Container tut, prueft eine E2E
+# gegen den laufenden Stack: plan-bridge/tests/test_offboard_gripper.py.
 # Bewusst KEIN ament_lint_auto: die bestehenden Quellen sind nie gelintet
 # worden, das nachtraeglich zu erzwingen wuerde den Build fuer alle brechen.
 

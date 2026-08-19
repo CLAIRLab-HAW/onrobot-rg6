@@ -1,13 +1,15 @@
 // rg6_control_sim: Simulations-Zwilling des Greifers OHNE Hardware.
 //
-// MASSGEBLICH ist seit 2026-08-19 die Oberflaeche von rg6_grip_bridge, dem
-// Node, der den RG6 am echten Roboter per XML-RPC an der OnRobot-URCap
-// kommandiert.  Was der Mock davon nachbildet, ist genau das:
+// MASSGEBLICH ist die Oberflaeche von rg6_grip_bridge, dem Node, der den RG6 am
+// echten Roboter per XML-RPC an der OnRobot-URCap kommandiert.  Was der Mock
+// davon nachbildet, ist genau das und nicht mehr:
 //   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
 //   Topic    rg6/bridge_state + das Treibergelenk auf joint_states
 //
-// und publiziert zusaetzlich das Treibergelenk als joint_states (ersetzt den
-// frueheren rg6_joint_state_broadcaster_sim) -> Modell animiert in RViz/Foxglove,
+// Ein Mock, der eine Oberflaeche nachbildet, die es nirgends gibt, ist eine
+// Vorlage fuer Code gegen etwas, das nicht existiert.
+//
+// Das Treibergelenk auf joint_states animiert das Modell in RViz/Foxglove, die
 // MoveIt-Integration ist damit komplett ohne Roboter testbar.  Die fuenf
 // Folgegelenke haengen im rg6_v2 per <mimic> am Treiber und werden von
 // robot_state_publisher und move_group selbst abgeleitet.
@@ -15,14 +17,6 @@
 // Bewegungsmodell: Weite faehrt mit konstanter Geschwindigkeit auf die Zielweite.
 // Mit sim_object_width_m > 0 stoppt das Schliessen an der Objektweite ->
 // grip_detected=true (wie das Tool-DI0-Signal der echten Hardware).
-//
-// AM 2026-08-19 ZURUECKGESCHNITTEN: die Services rg6_control/{open,close,grip,
-// set_force_preset,set_tool_power}, das Topic rg6/state (rg6_msgs/GripperState)
-// und das AI2-Modell sind ENTFALLEN.  Sie gehoerten zum geloeschten
-// Tool-DO-Treiber; am Roboter gibt es sie nicht mehr, und seit husky_sdk auf
-// die Action umgestellt ist, ruft sie niemand.  Ein Mock, der eine Oberflaeche
-// nachbildet, die es nirgends gibt, ist eine Vorlage fuer Code gegen etwas,
-// das nicht existiert.
 //
 // Grenze: das macht den Greifer im Container benutzbar, mehr nicht.  Die echten
 // RG6-Pathologien bleiben unabgedeckt (AI2 haengt bei zuen Backen auf 10 V, ein
@@ -84,9 +78,8 @@ public:
     blocking_cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 
     // Der Zustand als flaches JSON, unter dem Namen, den auch rg6_grip_bridge
-    // am Roboter benutzt.  Ohne ihn liest der plan_server im
-    // Container ins Leere -- genau der Fehler, der auf 'real' seit dem
-    // rg6_control-Ruhestand bestand und am 2026-08-19 aufgefallen ist.
+    // am Roboter benutzt.  Ohne ihn liest der plan_server im Container ins
+    // Leere -- der Greiferzustand ist dann auf beiden Stufen unbeantwortbar.
     bridge_state_pub_ = create_publisher<std_msgs::msg::String>(
       "rg6/bridge_state", rclcpp::QoS(10));
     // 'joint_states' relativ -> per Launch-Remap auf das gewuenschte Topic legen
@@ -149,19 +142,17 @@ private:
   {
     // NUR das Treibergelenk -- genau wie rg6_grip_bridge am echten Roboter.
     //
-    // Bis 2026-08-19 standen hier sechs Gelenke, fuenf davon mit den Namen des
-    // alten Greifermodells (left_inner_knuckle_joint & Co.).  Die gibt es im
-    // rg6_v2 nicht mehr; seine Folgegelenke heissen finger_joint_mirror,
-    // gripper_finger_{1,2}_truss_arm_joint und _finger_tip_joint, und sie
-    // haengen alle per <mimic> am Treiber -- robot_state_publisher und
-    // move_group leiten sie selbst ab, ein zweiter Absender ist ueberfluessig.
+    // Die Folgegelenke des rg6_v2 (finger_joint_mirror,
+    // gripper_finger_{1,2}_truss_arm_joint und _finger_tip_joint) haengen per
+    // <mimic> am Treiber; robot_state_publisher und move_group leiten sie
+    // selbst ab, ein zweiter Absender ist ueberfluessig.
     //
-    // Und er war nicht bloss ueberfluessig:  ein RobotState, der einen der
-    // toten Namen traegt, bringt move_group ueber
-    // RobotModel::getVariableIndex zum ABSTURZ (std::terminate, SIGABRT -- am
-    // 2026-08-19 zweimal reproduziert).  Jeder Verbraucher, der joint_states
-    // liest und in eine MoveIt-Anfrage zurueckgibt, war damit eine
-    // Abschussrampe.
+    // Er waere auch gefaehrlich:  ein RobotState, der einen Gelenknamen
+    // traegt, den das Modell nicht kennt, bringt move_group ueber
+    // RobotModel::getVariableIndex zum ABSTURZ (std::terminate, SIGABRT --
+    // nachgestellt und zweimal reproduziert).  Jeder Verbraucher, der
+    // joint_states liest und in eine MoveIt-Anfrage zurueckgibt, waere damit
+    // eine Abschussrampe.
     sensor_msgs::msg::JointState msg;
     msg.header.stamp = get_clock()->now();
     msg.name = {get_parameter("joint_prefix").as_string() + "finger_joint"};
@@ -173,13 +164,10 @@ private:
   // URDF des rg6_v2-Modells stammt (finger_kinematics.hpp, erzeugt von
   // tools/derive_finger_kinematics.py).
   //
-  // Bis 2026-08-19 stand hier ``rg6_control::linkage`` -- die Kurbelschwinge
-  // des ALTEN, selbstgebauten Greifermodells.  Sie hat zwei Dinge falsch
-  // gerechnet, und beide waren am laufenden Container messbar:  ihr q=0 liegt
-  // bei 93,4 mm statt bei den 153,2 mm des neuen Modells, und sie gibt fuer
-  // die ganz offene Hand -0,93766 rad zurueck -- ein Wert AUSSERHALB der
-  // Gelenkgrenzen des rg6_v2 (0,0 bis 1,25478).  Der Mock stellte den Greifer
-  // damit in eine Stellung, die es nicht gibt.
+  // Die Tabelle, nicht eine Kurbelschwingen-Formel:  eine nachgerechnete
+  // Linkage verfehlt beim rg6_v2 sowohl die Weite bei q=0 (153,2 mm) als auch
+  // die Gelenkgrenzen (0,0 bis 1,25478 rad) und stellt den Greifer damit in
+  // Stellungen, die es nicht gibt.
   static double angle_from_width(double width_m)
   {
     return rg6_control::finger_kinematics::angle_from_width(width_m);

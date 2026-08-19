@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Robot-weite joint_states-Aggregation + Legacy-Bus-Relay fuer a200_0553 (Phase 2).
+"""Robot-weite joint_states-Aggregation + Legacy-Bus-Relay fuer a200_0553.
 
 Hintergrund (Multi-CM-Clearpath): Raeder-, Arm- und Greifer-joint_states kommen aus
 DREI getrennten Quellen und werden nicht automatisch zu einem vollstaendigen
@@ -21,13 +21,11 @@ DREI getrennten Quellen und werden nicht automatisch zu einem vollstaendigen
      ankommen -> Zustand zwar korrekt angezeigt (best-effort RSP), aber Planning
      schlaegt fehl. Siehe joint_state_relay.cpp.
 
-Voraussetzung Phase 2:
-  - Arm-JSB-Remap in clearpath_manipulators/control.launch.py ist per
-    clearpath-custom-setup auf manipulators/joint_states umgestellt.
+Voraussetzungen:
+  - Arm-JSB-Remap in clearpath_manipulators/control.launch.py steht per
+    clearpath-custom-setup auf manipulators/joint_states.
   - Greifer publiziert auf manipulators/endeffectors/joint_states.  Quelle ist
-    seit 2026-08-19 rg6_grip_bridge (am Roboter, 5 Hz) bzw. rg6_control_sim
-    (im Container); das fruehere rg6_bringup.launch.py ist mit dem Tool-DO-
-    Treiber entfallen.
+    rg6_grip_bridge (am Roboter, 5 Hz) bzw. rg6_control_sim (im Container).
 Die Raeder bleiben (korrekt) auf platform/joint_states.
 """
 

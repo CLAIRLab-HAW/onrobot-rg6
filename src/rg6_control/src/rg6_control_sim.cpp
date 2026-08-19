@@ -1,10 +1,21 @@
-// rg6_control_sim: Simulations-Zwilling von rg6_control OHNE UR-Hardware.
+// rg6_control_sim: Simulations-Zwilling des Greifers OHNE Hardware.
 //
-// Bietet dieselbe ROS-Schnittstelle wie der Realtreiber:
+// MASSGEBLICH ist seit 2026-08-19 die Oberflaeche von rg6_grip_bridge, dem
+// Node, der den RG6 am echten Roboter per XML-RPC an der OnRobot-URCap
+// kommandiert.  Was der Mock davon nachbildet, ist genau das:
+//   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
+//   Topic    rg6/bridge_state + das Treibergelenk auf joint_states
+//
+// ALTLAST, ohne Verbraucher: die Services rg6_control/{open,close,grip,
+// set_force_preset,set_tool_power} und das Topic rg6/state.  Sie gehoerten
+// zum geloeschten Tool-DO-Treiber; am Roboter gibt es sie nicht mehr, und
+// seit husky_sdk auf die Action umgestellt ist, ruft sie niemand.  Sie stehen
+// hier nur noch, weil ihr Ausbau eigene Arbeit ist -- NICHT, weil der Mock
+// damit "dieselbe Oberflaeche wie der echte Treiber" haette.  Wer sie als
+// Vorlage fuer echten Code nimmt, baut gegen etwas, das es nicht gibt.
 //   Services rg6_control/{open,close} (Trigger),
 //            rg6_control/grip (rg6_msgs/Grip),
 //            rg6_control/set_force_preset, rg6_control/set_tool_power (SetBool)
-//   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
 //   Topic    rg6/bridge_state (std_msgs/String, flaches JSON) -- DERSELBE
 //            Name und dasselbe JSON wie rg6_grip_bridge am echten Roboter
 //   Topic    rg6/state (rg6_msgs/GripperState) -- der alte Kanal, nur noch

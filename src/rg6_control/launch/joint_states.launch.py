@@ -24,8 +24,10 @@ DREI getrennten Quellen und werden nicht automatisch zu einem vollstaendigen
 Voraussetzung Phase 2:
   - Arm-JSB-Remap in clearpath_manipulators/control.launch.py ist per
     clearpath-custom-setup auf manipulators/joint_states umgestellt.
-  - Greifer publiziert auf manipulators/endeffectors/joint_states
-    (rg6_bringup.launch.py, Argument js_topic).
+  - Greifer publiziert auf manipulators/endeffectors/joint_states.  Quelle ist
+    seit 2026-08-19 rg6_grip_bridge (am Roboter, 5 Hz) bzw. rg6_control_sim
+    (im Container); das fruehere rg6_bringup.launch.py ist mit dem Tool-DO-
+    Treiber entfallen.
 Die Raeder bleiben (korrekt) auf platform/joint_states.
 """
 

@@ -4,6 +4,43 @@ Was sich wann geändert hat. Der aktuelle Stand steht in der [README](README.md)
 die Einbettung in den Onboard-Stack in
 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
+## 2026-08-19 (Nachlese zum URCap-Umbau)
+
+- **Der SRDF-Patch traegt wieder zwei `disable_collisions` — und ohne sie plant
+  `move_group` gar nichts.** Der Patch hatte seine Eintraege am selben Tag
+  entfernt, in der Annahme, der `moveit_collision_updater` erzeuge alle 82
+  Greiferpaare selbst und korrekt. Er erzeugt sie — bis auf
+  `moment_arm ↔ finger_tip` desselben Fingers. Diese beiden Glieder der
+  Viergelenkkette beruehren sich ueber den GANZEN Hub; gemessen mit
+  `check_state_validity` bei `rg6_finger_joint` von 0,0 bis 1,25478: in jeder
+  Stellung zwei Kontakte, immer dieses Paar. Die Folge war nicht eine
+  schlechtere Planung, sondern keine: `CheckStartStateCollision` brach die
+  Pipeline ab (`error_code 99999`, 0 Trajektorienpunkte). Mit den zwei Paaren
+  ist der ganze Hub gueltig und dasselbe Ziel plant mit 63 Punkten.
+- **Der Greifer-Mock spricht das Gelenk, das das Modell hat.** `rg6_control_sim`
+  publizierte sechs Gelenke, fuenf davon mit den Namen des alten Modells
+  (`left_inner_knuckle_joint` & Co.), und den Treiber bei ganz offener Hand mit
+  **-0,93766 rad** — ausserhalb der Grenzen des rg6_v2 (0,0 … 1,25478). Der Wert
+  kam aus der Kurbelschwinge des alten Modells (`rg6_control::linkage`), deren
+  q=0 bei 93,4 mm liegt statt bei 153,2 mm. Jetzt: nur das Treibergelenk, aus
+  der Tabelle des generierten URDF (`finger_kinematics.hpp`). Die fuenf
+  Folgegelenke haengen per `<mimic>` am Treiber und werden ohnehin abgeleitet.
+  **Das war kein Schoenheitsfehler:** ein `RobotState` mit einem dieser Namen
+  brachte `move_group` ueber `RobotModel::getVariableIndex` zum Absturz
+  (`std::terminate`, SIGABRT, zweimal reproduziert) — jeder Verbraucher, der
+  `joint_states` liest und in eine MoveIt-Anfrage zurueckgibt, war eine
+  Abschussrampe.
+- **`rg6_control_sim` publiziert `rg6/bridge_state`** (`std_msgs/String`, flaches
+  JSON) unter demselben Namen und mit denselben Feldern wie `rg6_grip_bridge`
+  am Roboter. Ohne das las der `plan_server` im Container ins Leere.
+- `tools/derive_finger_kinematics.py` kann die Getriebetabelle zusaetzlich als
+  C++-Header ausgeben (`--format cpp`). Zwei Ausgabeformate, EINE Quelle: die
+  Bruecke liest JSON, der Sim braucht C++, und zwei handgepflegte Tabellen sind
+  genau die Zweitfassung, vor der die Datei selbst warnt.
+- `ur_msgs` ist aus `package.xml`/`CMakeLists.txt` entfallen (die Abhaengigkeit
+  gehoerte dem geloeschten Realtreiber); die Paketbeschreibung sagt jetzt, was
+  das Paket noch enthaelt.
+
 ## 2026-08-19
 
 - **Der SRDF-Patch ist halb so gross und nicht mehr schaedlich.** Er trug die

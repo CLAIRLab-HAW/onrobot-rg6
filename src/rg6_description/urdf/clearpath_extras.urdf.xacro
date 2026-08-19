@@ -45,36 +45,45 @@
   </joint>
 
   <!-- ===================== RG6-Greifer an arm_0_tool0 =================== -->
-  <!-- Greifermodell instanziieren (Praefix 'rg6_'). -->
-  <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg6_model_macro.xacro"/>
-  <xacro:onrobot_rg6 prefix="rg6_"/>
+  <!-- Modell aus onrobot_description (rg6_v2, MIT, INRIA), einvendort;
+       Herkunft und Aenderungen in ../../../LICENSE-THIRD-PARTY.md.
 
-  <!-- Greiferbasis an den Tool-Flansch. Modell-Achse = +Z (wie altes Modell),
-       daher Roll -90deg um X. Falls noch verdreht, je 90deg variieren:
-         rpy="1.5708 0 0" | rpy="0 0 1.5708" | rpy="0 0 -1.5708"
+       KEIN Montageversatz: das single_bracket schraubt unmittelbar auf den
+       UR-Flansch (2026-08-19 am Geraet nachgesehen).  Sein Fuss IST die
+       Kopplungsflaeche, 71 mm Durchmesser.  Dazwischen liegt nur der
+       0,4-mm-Zentrierring des Flansches, und der ist eine Vertiefung.
 
-       z = 0: der Greifer sitzt UNMITTELBAR auf dem Flansch.  Am 2026-08-19
-       vom Owner am Geraet nachgesehen, nachdem hier zwischenzeitlich 0,0196
-       stand.  Diese 19,6 mm kamen aus ROBOTER-TODO R20, das aus dem
-       QC-Datenblatt geschlossen hatte, die ROBOTERSEITE des Quick Changers
-       fehle im Modell.  Der Schluss setzte eine separate QC-Scheibe zwischen
-       Flansch und Greifer voraus; die gibt es an diesem Roboter nicht.  Der
-       Fuss der Greiferbasis IST die Kopplungsflaeche (Ø71 mm, am Mesh
-       gemessen; unterste 20 mm von base_link.stl, und im fremden rg6_v2-Modell
-       ebenso als unterste Scheibe des single_bracket) und schraubt direkt auf
-       den Flansch.  Dazwischen liegt nur der 0,4-mm-Zentrierring des
-       UR-Flansches, und der ist eine Vertiefung, kein Aufbau. -->
-  <joint name="rg6_tool0_to_base" type="fixed">
-    <parent link="arm_0_tool0"/>
-    <child link="rg6_onrobot_rg6_base_link"/>
+       driver_joint haelt den Namen fest, den der ganze Workspace kennt:
+       rg6_finger_joint, 0 = offen, positiv = zu.  Die Folgegelenke haengen
+       per mimic daran. -->
+  <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg_upstream.urdf.xacro"/>
+  <xacro:onrobot_rg parent="arm_0_tool0" prefix="rg6_" model="rg6_v2"
+                    driver_joint="rg6_finger_joint">
     <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
+  </xacro:onrobot_rg>
+
+  <!-- Alter Name, gleicher Ort.  rg6_onrobot_rg6_base_link ist der Bezugspunkt
+       des SRDF-Patches und der MuJoCo-Szenen; ihn hier zu erhalten kostet einen
+       leeren Link und spart eine Umbenennung in drei Repos. -->
+  <link name="rg6_onrobot_rg6_base_link"/>
+  <joint name="rg6_base_link_alias" type="fixed">
+    <parent link="rg6_gripper_body"/><child link="rg6_onrobot_rg6_base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
-  <!-- Greifer-TCP (mittig zwischen den Fingerspitzen, grob). -->
+  <!-- Greifer-TCP.  DERSELBE physische Punkt wie im alten Modell: 210 mm ueber
+       der Kopplungsflaeche, am Anfang der Padflaeche.  Das neue Modell setzt
+       seinen grasp_frame 58,1 mm weiter vorn (nahe dem Pad-ENDE); ihn zu
+       uebernehmen haette den TCP still verschoben und jede kalibrierte Groesse
+       entwertet (descend_offset, floor_height, camera_xy_offset).  Am
+       2026-08-19 bewusst so entschieden; wohin der TCP physikalisch gehoert,
+       ist eine eigene Frage (ROBOTER-TODO R19/R23).
+       Ausgedrueckt gegen grasp_frame, damit er an der Modellgeometrie haengt
+       und nicht wieder an einer freien Zahl. -->
   <link name="rg6_hand_tcp"/>
   <joint name="rg6_hand_tcp_joint" type="fixed">
-    <origin xyz="0 0 0.21" rpy="0 0 0"/>
-    <parent link="rg6_onrobot_rg6_base_link"/><child link="rg6_hand_tcp"/>
+    <parent link="rg6_gripper_grasp_frame"/><child link="rg6_hand_tcp"/>
+    <origin xyz="0 0 -0.0581" rpy="0 0 0"/>
   </joint>
 
   <!-- ===== Custom Top-Assembly (ersetzt a200.sensor_arch) ===== -->

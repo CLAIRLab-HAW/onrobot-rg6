@@ -9,6 +9,32 @@ die Versionierung [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+- **`rg6_moveit_patch` gibt das Paar `flex_finger` <-> `flex_finger` frei --
+  ohne das war der Greifer in MoveIt nicht zu schliessen.** Die beiden
+  Gummipads beruehren sich nur in den letzten 1,3 % des Hubs (gemessen am
+  laufenden `move_group` per Bisektion: letzte gueltige Stellung 1,238486 rad
+  = 3,01 mm lichte Weite, Kontaktband 0,016294 rad). Dort landet das Sampling
+  des `moveit_collision_updater` praktisch nie, das Paar galt ihm als
+  "manchmal in Kollision" und blieb aktiv.
+
+  Folge: `move_group` verwies jede Stellung enger als 3 mm -- waehrend
+  dieselbe SRDF einen `group_state` `close` bei 1,25478 rad (0,40 mm) anbot.
+  Das Modell verbot seinen eigenen Named State, und nichts duenner als 3 mm
+  war ueber MoveIt greifbar. Der Hub geht von 153,17 mm auf 0,40 mm.
+
+  Freigegeben statt `close` entschaerft: die Selbstkollisionspruefung soll den
+  Roboter vor sich selbst schuetzen, und ein leer zufahrender Greifer ist der
+  Normalfall, den die Hardware bei jedem Griff ausfuehrt. Die zwei Pads SIND
+  die Greifflaechen. Der echte Anschlag bleibt das Gelenklimit.
+
+  `reason="User"`: weder `Adjacent` (im URDF keine Nachbarn) noch `Default`
+  (in der Standardstellung 153 mm auseinander) trifft zu.
+
+  Damit sind es drei gepatchte Paare statt zwei. Das dritte fehlte aus dem
+  umgekehrten Grund wie die ersten beiden: die sind ueber den ganzen Hub in
+  Kontakt, dieses fast nirgends.
+
 ## [0.2.0] - 2026-08-19
 
 ### README auf den Ist-Zustand

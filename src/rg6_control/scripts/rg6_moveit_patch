@@ -18,11 +18,13 @@ clearpath-custom-setup.py):
        + end_effector 'rg6' parent_group arm_0, parent_link arm_0_wrist_3_link
          (tiefstes arm_0-Mitglied; tool0 ist kein arm_0-Member, s. Kommentar am
          SRDF_FRAGMENT_TEMPLATE)
-       + GENAU ZWEI <disable_collisions>: moment_arm<->finger_tip je Finger.
-       Nur diese zwei: der
+       + GENAU DREI <disable_collisions>: moment_arm<->finger_tip je Finger,
+       und flex_finger<->flex_finger zwischen den Fingern. Nur diese drei: der
        moveit_collision_updater erzeugt mit dem rg6_v2-Modell 82 Greiferpaare
-       selbst und korrekt benannt, aber diese beiden NICHT, und genau sie sind
-       ueber den ganzen Hub in Kontakt (s. Kommentar am SRDF_FRAGMENT_TEMPLATE).
+       selbst und korrekt benannt, diese drei aber NICHT -- die ersten beiden,
+       weil sie ueber den ganzen Hub in Kontakt sind, das dritte, weil es nur
+       in den letzten 1,3 % des Hubs in Kontakt ist (s. Kommentar am
+       SRDF_FRAGMENT_TEMPLATE).
   2. <setup>/manipulators/config/moveit.yaml wird NICHT gepatcht, nur
      GEPRUEFT. Beide Eintraege stehen in robot.yaml unter
      manipulators.moveit.ros_parameters.move_group, und der Clearpath-
@@ -85,13 +87,14 @@ MARKER_END = "<!-- onrobot-rg6:END -->"
 # Planungs-Trajektorie und per group_mimic_update_ aus finger_joint abgeleitet
 # -> saubere Animation aller 6 Gelenke im MoveIt-Planungs-Preview. Ohne diese
 # Aufnahme animiert MoveIt nur rg6_finger_joint ("nur ein Finger bewegt sich").
-# DIE ZWEI disable_collisions-PAARE, und warum es genau diese sind.
+# DIE DREI disable_collisions-PAARE, und warum es genau diese sind.
 #
 # Der moveit_collision_updater sampelt Stellungen und deaktiviert, was er dabei
 # beruehren sieht. Fuer das rg6_v2-Modell liefert er 82 Greiferpaare -- darunter
-# alle Kreuzpaare Finger 1 <-> Finger 2 und die direkten Nachbarn
+# fast alle Kreuzpaare Finger 1 <-> Finger 2 und die direkten Nachbarn
 # moment_arm<->truss_arm und finger_tip<->truss_arm als "Adjacent". NICHT
-# darunter: moment_arm<->finger_tip DESSELBEN Fingers.
+# darunter: moment_arm<->finger_tip DESSELBEN Fingers, und das eine Kreuzpaar
+# flex_finger<->flex_finger.
 #
 # In der Viergelenkkette moment_arm -> truss_arm -> finger_tip sind diese beiden
 # Glieder zwei Gelenke auseinander und trotzdem dauerhaft in Beruehrung. Am
@@ -108,6 +111,33 @@ MARKER_END = "<!-- onrobot-rg6:END -->"
 # Nachbarn. "Default" ist die Kategorie fuer "beruehren sich in der
 # Standardstellung", und das trifft hier zu -- in jeder Stellung.
 #
+# DAS DRITTE PAAR: flex_finger <-> flex_finger, die beiden Gummipads.
+#
+# Es fehlt aus dem umgekehrten Grund. Die Pads beruehren sich NUR ganz am Ende
+# des Hubs, und das Sampling des Updaters landet dort praktisch nie -- fuer ihn
+# ist das Paar "manchmal in Kollision" und bleibt aktiv. Am 2026-08-20 am
+# laufenden move_group ausgemessen (check_state_validity, Bisektion):
+#
+#   letzte gueltige Stellung  1,238486 rad  ->  3,01 mm lichte Weite
+#   erste kollidierende       1,238486 rad
+#   Kontaktband               0,016294 rad  =  1,3 % des Hubs
+#
+# Der Hub geht von 153,17 mm (offen) auf 0,40 mm (zu). Solange das Paar aktiv
+# war, verweigerte move_group also JEDE Stellung enger als 3 mm -- waehrend
+# dieselbe SRDF einen group_state "close" bei 1,25478 rad anbot. Das Modell
+# verbot seinen eigenen Named State, und nichts duenner als 3 mm war greifbar.
+#
+# Freigegeben statt "close" entschaerft, weil die Selbstkollisionspruefung den
+# Roboter vor sich selbst schuetzen soll: ein leer zufahrender Greifer ist der
+# Normalfall, den die Hardware bei jedem Griff ausfuehrt, und die zwei Pads
+# SIND die Greifflaechen. Dass sie bei 0,4 mm Spalt aneinanderstossen, ist der
+# geschlossene Greifer und keine Selbstkollision. Der echte Anschlag bleibt das
+# Gelenklimit (1,25478 rad); daran aendert die Freigabe nichts.
+#
+# reason="User": weder "Adjacent" (im URDF keine Nachbarn) noch "Default" (in
+# der Standardstellung stehen sie 153 mm auseinander) trifft zu. "User" ist die
+# Kategorie fuer eine bewusste Freigabe, und genau das ist es.
+#
 SRDF_FRAGMENT_TEMPLATE = """\
     <group name="{gripper_group}">
         <joint name="{prefix}finger_joint"/>
@@ -119,6 +149,7 @@ SRDF_FRAGMENT_TEMPLATE = """\
     </group>
     <disable_collisions link1="{prefix}gripper_finger_1_moment_arm" link2="{prefix}gripper_finger_1_finger_tip" reason="Default"/>
     <disable_collisions link1="{prefix}gripper_finger_2_moment_arm" link2="{prefix}gripper_finger_2_finger_tip" reason="Default"/>
+    <disable_collisions link1="{prefix}gripper_finger_1_flex_finger" link2="{prefix}gripper_finger_2_flex_finger" reason="User"/>
     <group_state name="open" group="{gripper_group}">
         <joint name="{prefix}finger_joint" value="{angle_open}"/>
     </group_state>

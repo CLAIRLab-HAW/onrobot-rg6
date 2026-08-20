@@ -121,6 +121,57 @@
         <mesh filename="package://rg6_description/meshes/husky_sensor_arch.gltf"/>
       </geometry>
     </visual>
+
+    <!-- KOLLISION (ROBOTER-TODO R15).  Bis 2026-08-20 hatte dieser Link NUR
+         <visual>: im Viewer sichtbar, fuer move_group nicht vorhanden.  Eine
+         Bahn konnte durch den Buegel fuehren, ohne dass Planer oder
+         check_state_validity es bemerkt haetten.  Der Buegel steht 0,772 m von
+         der Armbasis, der UR5 reicht 0,85 m - er ist erreichbar.
+
+         KEINE Gesamt-Bounding-Box.  Das Mesh fuellt seine Huelle nur zu 2,4 %
+         aus (2,3 L Struktur in 91,3 L Huelle); eine einzelne Box haette das
+         ganze Heck zugemauert und legitime Bahnen blockiert.  Stattdessen
+         sechs Kaesten entlang der tatsaechlichen Struktur - zwei Portalbeine,
+         Quertraeger, Sensorkopf, zwei Fuesse mit Diagonalstrebe: zusammen
+         5,87 L.  Nachgerechnet: ALLE 4560 Mesh-Vertices liegen darin.
+
+         Die Kaesten stehen im MESH-Frame, deshalb tragen sie dieselbe
+         rpy="0 0 -1.5708" wie das <visual> oben.  Wer eine Zahl aendert, aendert
+         sie im Mesh-Frame und dreht sie NICHT von Hand mit.
+
+         2 mm ueber dem Fuss abgeschnitten (z beginnt bei 0,002 statt 0,000).
+         Der Link-Ursprung sitzt bei Welt-z 0,2307 - exakt auf der Oberkante
+         von top_plate_link (0,2240..0,2307).  Bei z=0 beruehren sich beide
+         Koerper, und MoveIt liest eine Beruehrung als DAUERKOLLISION: der
+         Roboter waere in jeder Stellung ungueltig, move_group haette nichts
+         mehr geplant.  Die 2 mm sind kein Modellverlust - dort steht die
+         Deckplatte, die selbst Kollisionsgeometrie hat.  Alternative waere ein
+         disable_collisions-Eintrag in der SRDF gewesen; die wird generiert,
+         der Schnitt hier haelt die Aenderung in EINER Datei. -->
+    <collision>  <!-- Portalbein links -->
+      <origin xyz="0.0500 -0.0475 0.2510" rpy="0 0 -1.5708"/>
+      <geometry><box size="0.035 0.030 0.498"/></geometry>
+    </collision>
+    <collision>  <!-- Portalbein rechts -->
+      <origin xyz="0.0500 -0.5725 0.2510" rpy="0 0 -1.5708"/>
+      <geometry><box size="0.035 0.030 0.498"/></geometry>
+    </collision>
+    <collision>  <!-- Quertraeger oben -->
+      <origin xyz="0.0500 -0.3100 0.4900" rpy="0 0 -1.5708"/>
+      <geometry><box size="0.560 0.030 0.050"/></geometry>
+    </collision>
+    <collision>  <!-- Sensorkopf -->
+      <origin xyz="0.0500 -0.3150 0.5500" rpy="0 0 -1.5708"/>
+      <geometry><box size="0.120 0.120 0.100"/></geometry>
+    </collision>
+    <collision>  <!-- Fuss links, inkl. Diagonalstrebe -->
+      <origin xyz="0.1500 -0.0475 0.0810" rpy="0 0 -1.5708"/>
+      <geometry><box size="0.035 0.230 0.158"/></geometry>
+    </collision>
+    <collision>  <!-- Fuss rechts, inkl. Diagonalstrebe -->
+      <origin xyz="0.1500 -0.5725 0.0810" rpy="0 0 -1.5708"/>
+      <geometry><box size="0.035 0.230 0.158"/></geometry>
+    </collision>
   </link>
   <joint name="husky_top_assembly_joint" type="fixed">
     <parent link="top_plate_rear_mount"/>

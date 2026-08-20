@@ -9,6 +9,36 @@ die Versionierung [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+- **`husky_top_assembly` hat Kollisionsgeometrie (ROBOTER-TODO R15).** Der
+  Sensorbügel war im Viewer sichtbar und für `move_group` nicht vorhanden:
+  eine Bahn konnte hindurchführen, ohne dass Planer oder
+  `check_state_validity` es bemerkt hätten. Er steht 0,772 m von der Armbasis,
+  der UR5 reicht 0,85 m — er ist erreichbar.
+
+  **Keine Gesamt-Bounding-Box.** Das Mesh füllt seine Hülle nur zu **2,4 %**
+  (2,3 L Struktur in 91,3 L Hülle); eine einzelne Box hätte das ganze Heck
+  zugemauert. Stattdessen **sechs Kästen** entlang der aus dem Mesh
+  dekodierten Struktur — zwei Portalbeine, Querträger, Sensorkopf, zwei Füße
+  mit Diagonalstrebe — zusammen **5,87 L**. Nachgerechnet: **alle 4560
+  Vertices** liegen darin, keiner außerhalb.
+
+- **Die Kästen beginnen 2 mm über dem Fuß, und das ist der Punkt.** Der
+  Link-Ursprung sitzt bei Welt-z 0,2307, exakt auf der Oberkante von
+  `top_plate_link` (0,2240…0,2307). Bei z = 0 berühren sich beide Körper, und
+  MoveIt liest eine Berührung als **Dauerkollision**: der Roboter wäre in
+  jeder Stellung ungültig gewesen und `move_group` hätte nichts mehr geplant.
+  Am geladenen `robot_description` des Roboters gegengerechnet — mit dem
+  Schnitt: **null dauerhafte Überlappungen** für alle sechs Kästen.
+
+- **Der Frontstoßfänger bekommt bewusst nichts.** R15 führt
+  `front_bumper_link` als „in Reichweite, echt ungemodellt". Nachgemessen ist
+  er das nicht: sein Volumen (x 0,406…0,494, y ±0,267, z 0,078…0,104) liegt
+  **vollständig** in der unteren Kollisionsbox von `base_link`
+  (x ±0,494, y ±0,285, z 0…0,124). Eigene Geometrie hätte nichts abgedeckt,
+  was nicht schon abgedeckt ist — derselbe Fall wie `top_chassis_link`, den
+  R15 selbst als redundant führt.
+
 ### Behoben
 - **`rg6_moveit_patch` gibt das Paar `flex_finger` <-> `flex_finger` frei --
   ohne das war der Greifer in MoveIt nicht zu schliessen.** Die beiden

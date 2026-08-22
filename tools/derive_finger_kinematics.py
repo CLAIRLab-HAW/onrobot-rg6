@@ -14,7 +14,8 @@ veraltete Tabelle ist eine sichtbare Datei mit Datum statt einer stillen
 Abweichung.
 
     xacro robot.urdf.xacro > /tmp/robot.urdf
-    python3 derive_finger_kinematics.py /tmp/robot.urdf > scripts/rg6_finger_kinematics.json
+    python3 derive_finger_kinematics.py /tmp/robot.urdf \\
+        > <husky-custom-setup>/scripts/rg6_finger_kinematics.json
     python3 derive_finger_kinematics.py /tmp/robot.urdf --format cpp \\
         > src/rg6_control/include/rg6_control/finger_kinematics.hpp
 

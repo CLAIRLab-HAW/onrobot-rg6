@@ -106,7 +106,7 @@ robot. The five follower joints hang off the driver via `<mimic>` in the
 ```bash
 ros2 run rg6_control rg6_control_sim --ros-args -r __ns:=/a200_0553/manipulators
 # emulate an object: -p sim_object_width_m:=0.05
-#   closing stops at that width -> grip_detected=true (like the real Tool-DI0)
+#   closing stops at that width -> grip_detected=true (as the real bridge reports it)
 ```
 
 Motion model: the width travels to the target at constant speed. What this

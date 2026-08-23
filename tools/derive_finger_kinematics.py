@@ -36,8 +36,8 @@ import numpy as np
 
 #: Schrittweite der Stuetzstellen.  0,05 rad haelt den Interpolationsfehler
 #: unter 0,05 mm; das ist die halbe Fingerpositionsaufloesung des RG6.
-SCHRITT_RAD = 0.05
-TREIBER = "rg6_finger_joint"
+STEP_RAD = 0.05
+DRIVER = "rg6_finger_joint"
 
 
 def _rpy_to_R(r, p, y):
@@ -50,11 +50,11 @@ def _rpy_to_R(r, p, y):
 
 def _kette(urdf):
     root = ET.parse(urdf).getroot()
-    K, grenze = {}, None
+    K, limit = {}, None
     for j in root.findall("joint"):
         par, ch, o = j.find("parent"), j.find("child"), j.find("origin")
-        if j.get("name") == TREIBER and j.find("limit") is not None:
-            grenze = float(j.find("limit").get("upper"))
+        if j.get("name") == DRIVER and j.find("limit") is not None:
+            limit = float(j.find("limit").get("upper"))
         if par is None or ch is None:
             continue
         ax = j.find("axis")
@@ -66,13 +66,13 @@ def _kette(urdf):
                           ((o.get("rpy") if o is not None else None) or "0 0 0").split()]),
             axis=np.array([float(v) for v in
                            ((ax.get("xyz") if ax is not None else None) or "0 0 0").split()]))
-    if grenze is None:
-        raise SystemExit(f"{TREIBER} hat im URDF keine obere Gelenkgrenze")
-    return K, grenze
+    if limit is None:
+        raise SystemExit(f"{DRIVER} hat im URDF keine obere Gelenkgrenze")
+    return K, limit
 
 
-def _pose(K, ziel, q):
-    T, kette, link = np.eye(4), [], ziel
+def _pose(K, goal, q):
+    T, kette, link = np.eye(4), [], goal
     while link in K:
         kette.append(K[link])
         link = K[link]["parent"]
@@ -90,7 +90,7 @@ def _pose(K, ziel, q):
     return T
 
 
-HPP_KOPF = """\
+HPP_HEAD = """\
 // ERZEUGT, NICHT GEPFLEGT -- tools/derive_finger_kinematics.py aus dem
 // generierten URDF des Greifermodells.  Nach jeder Aenderung am Modell neu
 // erzeugen; von Hand editierte Zahlen laufen still gegen den Roboter weg.
@@ -168,32 +168,32 @@ inline double angle_from_width(double width_m)
 """
 
 
-def _als_hpp(tab, qmax, fehler) -> str:
-    zeilen = ",\n".join(f"  {{{{{q:.5f}, {w:.6f}}}}}" for q, w in tab)
-    return HPP_KOPF.format(joint=TREIBER, qmax=f"{qmax:.5f}", n=len(tab),
-                           zeilen=zeilen, fehler_mm=f"{fehler * 1000:.3f}")
+def _as_hpp(tab, qmax, error) -> str:
+    lines = ",\n".join(f"  {{{{{q:.5f}, {w:.6f}}}}}" for q, w in tab)
+    return HPP_HEAD.format(joint=DRIVER, qmax=f"{qmax:.5f}", n=len(tab),
+                           lines=lines, error_mm=f"{error * 1000:.3f}")
 
 
 def main(urdf: str, fmt: str = "json") -> int:
     K, qmax = _kette(urdf)
-    flaechen = sorted(n for n in K if n.endswith("flex_finger"))
-    if len(flaechen) != 2:
-        raise SystemExit(f"erwarte zwei flex_finger-Greifflaechen, gefunden: {flaechen}")
+    faces = sorted(n for n in K if n.endswith("flex_finger"))
+    if len(faces) != 2:
+        raise SystemExit(f"erwarte zwei flex_finger-Greifflaechen, gefunden: {faces}")
 
-    def weite(q: float) -> float:
-        a = _pose(K, flaechen[0], q)[:3, 3]
-        b = _pose(K, flaechen[1], q)[:3, 3]
+    def width(q: float) -> float:
+        a = _pose(K, faces[0], q)[:3, 3]
+        b = _pose(K, faces[1], q)[:3, 3]
         return float(np.linalg.norm(a - b))
 
-    qs = list(np.arange(0.0, qmax, SCHRITT_RAD)) + [qmax]
-    tab = [[round(float(q), 5), round(weite(q), 6)] for q in qs]
+    qs = list(np.arange(0.0, qmax, STEP_RAD)) + [qmax]
+    tab = [[round(float(q), 5), round(width(q), 6)] for q in qs]
 
-    fein = np.linspace(0.0, qmax, 400)
-    fehler = np.abs(np.array([weite(q) for q in fein])
-                    - np.interp(fein, [t[0] for t in tab], [t[1] for t in tab])).max()
+    fine = np.linspace(0.0, qmax, 400)
+    error = np.abs(np.array([width(q) for q in fine])
+                    - np.interp(fine, [t[0] for t in tab], [t[1] for t in tab])).max()
 
     if fmt == "cpp":
-        sys.stdout.write(_als_hpp(tab, qmax, float(fehler)))
+        sys.stdout.write(_as_hpp(tab, qmax, float(error)))
         return 0
 
     json.dump({
@@ -205,9 +205,9 @@ def main(urdf: str, fmt: str = "json") -> int:
             "Die Obergrenze ist der Nulldurchgang der Weite; darueber fahren die",
             "Finger im Modell durcheinander hindurch und die Weite waechst wieder.",
         ],
-        "joint": TREIBER,
+        "joint": DRIVER,
         "joint_limits_rad": [0.0, round(qmax, 5)],
-        "max_interpolationsfehler_m": round(float(fehler), 6),
+        "max_interpolationsfehler_m": round(float(error), 6),
         "table_q_rad_width_m": tab,
     }, sys.stdout, indent=1)
     sys.stdout.write("\n")

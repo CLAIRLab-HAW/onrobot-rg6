@@ -1,31 +1,32 @@
 #!/usr/bin/env python3
-"""Robot-weite joint_states-Aggregation + Legacy-Bus-Relay fuer a200_0553.
+"""Robot-wide joint_states aggregation + legacy bus relay for the a200_0553.
 
-Hintergrund (Multi-CM-Clearpath): Raeder-, Arm- und Greifer-joint_states kommen aus DREI getrennten Quellen und werden
-nicht automatisch zu einem vollstaendigen /joint_states zusammengefuehrt. Dieses Launch stellt her:
+Background (multi-CM Clearpath): the wheel, arm and gripper joint_states come from THREE separate sources and are not
+automatically merged into one complete /joint_states. This launch file establishes:
 
-  1. joint_state_aggregator: fasst die (partiellen) Quellen zu EINEM vollstaendigen
-     /a200_0553/joint_states zusammen (mit velocity+effort) -> fuer rosbag/Foxglove.
-     Bewusst NICHT als Live-TF-Feed (Aggregator im TF-Pfad = SPOF).
+  1. joint_state_aggregator: merges the (partial) sources into ONE complete
+     /a200_0553/joint_states (with velocity+effort) -> for rosbag/Foxglove.
+     Deliberately NOT as a live TF feed (an aggregator in the TF path = SPOF).
 
-  2. joint_state_relay: spiegelt die sauberen Quell-Topics manipulators/joint_states
-     und manipulators/endeffectors/joint_states zurueck auf
-     /a200_0553/platform/joint_states, den Clearpaths robot_state_publisher (x2) und
-     move_group per Stock-Launch abonnieren. So bleiben die Live-Consumer (TF/MoveIt)
-     UNANGETASTET, waehrend Arm & Greifer im korrekten Namespace publizieren.
+  2. joint_state_relay: mirrors the clean source topics manipulators/joint_states
+     and manipulators/endeffectors/joint_states back onto
+     /a200_0553/platform/joint_states, which Clearpath's robot_state_publisher (x2)
+     and move_group subscribe to via the stock launch. This leaves the live
+     consumers (TF/MoveIt) UNTOUCHED while arm and gripper publish in the correct
+     namespace.
 
-     WICHTIG: eigener Relay-Node (NICHT topic_tools relay), weil dieser mit EXPLIZIT
-     RELIABLE Publisher-QoS publiziert. move_group abonniert platform/joint_states
-     RELIABLE -> ein best-effort-Publisher (topic_tools-Default) wuerde dort NICHT
-     ankommen -> Zustand zwar korrekt angezeigt (best-effort RSP), aber Planning
-     schlaegt fehl. Siehe joint_state_relay.cpp.
+     IMPORTANT: a relay node of our own (NOT topic_tools relay), because this one
+     publishes with EXPLICITLY RELIABLE publisher QoS. move_group subscribes to
+     platform/joint_states RELIABLE -> a best-effort publisher (the topic_tools
+     default) would NOT arrive there -> the state would be displayed correctly
+     (best-effort RSP) but planning would fail. See joint_state_relay.cpp.
 
-Voraussetzungen:
-  - Arm-JSB-Remap in clearpath_manipulators/control.launch.py steht per
-    clearpath-custom-setup auf manipulators/joint_states.
-  - Greifer publiziert auf manipulators/endeffectors/joint_states.  Quelle ist
-    rg6_grip_bridge (am Roboter, 5 Hz) bzw. rg6_control_sim (im Container).
-Die Raeder bleiben (korrekt) auf platform/joint_states.
+Preconditions:
+  - The arm JSB remap in clearpath_manipulators/control.launch.py is set to
+    manipulators/joint_states by clearpath-custom-setup.
+  - The gripper publishes on manipulators/endeffectors/joint_states.  The source is
+    rg6_grip_bridge (on the robot, 5 Hz) or rg6_control_sim (in the container).
+The wheels stay (correctly) on platform/joint_states.
 """
 
 from launch import LaunchDescription
@@ -35,7 +36,7 @@ NAMESPACE = "a200_0553"
 
 
 def generate_launch_description():
-    # Aggregat fuer Beobachtung/Recording: /a200_0553/joint_states (vollstaendig).
+    # Aggregate for observation/recording: /a200_0553/joint_states (complete).
     aggregator = Node(
         package="rg6_control",
         executable="joint_state_aggregator",
@@ -48,7 +49,7 @@ def generate_launch_description():
                 "source_topics": [
                     "platform/joint_states",  # Raeder
                     "manipulators/joint_states",  # Arm
-                    "manipulators/endeffectors/joint_states",  # Greifer
+                    "manipulators/endeffectors/joint_states",  # gripper
                 ],
                 "output_topic": "joint_states",  # -> /a200_0553/joint_states
                 "publish_rate": 50.0,
@@ -56,9 +57,9 @@ def generate_launch_description():
         ],
     )
 
-    # Legacy-Bus am Leben halten: Arm + Greifer zurueck auf platform/joint_states, RELIABLE (fuer den reliable
-    # move_group-Subscriber; siehe joint_state_relay.cpp). Die Subscriptions reconnecten automatisch, wenn
-    # clearpath-manipulators (und damit der Arm-JSB) neu startet.
+    # Keep the legacy bus alive: arm + gripper back onto platform/joint_states, RELIABLE (for the reliable move_group
+    # subscriber; see joint_state_relay.cpp). The subscriptions reconnect automatically when clearpath-manipulators
+    # (and with it the arm JSB) restarts.
     relay = Node(
         package="rg6_control",
         executable="joint_state_relay",

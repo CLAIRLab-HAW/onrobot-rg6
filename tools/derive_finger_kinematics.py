@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Leitet die Tabelle Gelenkwinkel -> Greifweite aus einem GENERIERTEN URDF ab.
+"""Derives the joint angle -> gripping width table from a GENERATED URDF.
 
-Warum aus dem URDF und nicht aus einer Formel:  die Finger des rg6_v2 sind eine Viergelenkkette (moment_arm -> truss_arm
--> finger_tip -> flex_finger), alle drei per ``mimic`` am selben Winkel.  Es gibt keine geschlossene Formel dafuer, und
-eine danebengestellte Naeherung waere genau die Zweitfassung, an der das alte Modell und sein Treiber schon einmal
-auseinandergelaufen sind (R19).
+Why from the URDF and not from a formula:  the fingers of the rg6_v2 are a four-bar chain (moment_arm -> truss_arm ->
+finger_tip -> flex_finger), all three tied to the same angle via ``mimic``.  There is no closed formula for it, and an
+approximation placed alongside would be exactly the second version on which the old model and its driver have already
+drifted apart once (R19).
 
-Warum eine TABELLE und kein Import:  die Greiferbruecke laeuft auf dem Roboter und soll dort nichts importieren muessen,
-was nicht zum Roboter gehoert.  Eine Tabelle ist Daten, kein Paket -- sie kostet keine Abhaengigkeit, und eine veraltete
-Tabelle ist eine sichtbare Datei mit Datum statt einer stillen Abweichung.
+Why a TABLE and not an import:  the gripper bridge runs on the robot and is not supposed to import anything there that
+does not belong to the robot.  A table is data, not a package -- it costs no dependency, and an outdated table is a
+visible file with a date instead of a silent deviation.
 
     xacro robot.urdf.xacro > /tmp/robot.urdf
     python3 derive_finger_kinematics.py /tmp/robot.urdf \\
@@ -16,9 +16,9 @@ Tabelle ist eine sichtbare Datei mit Datum statt einer stillen Abweichung.
     python3 derive_finger_kinematics.py /tmp/robot.urdf --format cpp \\
         > src/rg6_control/include/rg6_control/finger_kinematics.hpp
 
-Zwei Ausgabeformate, EINE Quelle.  Die Tabelle wird an zwei Stellen gebraucht, die einander nicht importieren koennen:
-die Greiferbruecke auf dem Roboter liest sie als JSON, ``rg6_control_sim`` im Container braucht sie in C++.  Sie zweimal
-von Hand zu pflegen ist genau die Zweitfassung, vor der der Absatz oben warnt -- deshalb erzeugt dieses Skript beide.
+Two output formats, ONE source.  The table is needed in two places that cannot import each other: the gripper bridge on
+the robot reads it as JSON, ``rg6_control_sim`` in the container needs it in C++.  Maintaining it twice by hand is
+exactly the second version the paragraph above warns about -- which is why this script produces both.
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-#: Schrittweite der Stuetzstellen.  0,05 rad haelt den Interpolationsfehler
-#: unter 0,05 mm; das ist die halbe Fingerpositionsaufloesung des RG6.
+#: Step size of the sampling points.  0,05 rad keeps the interpolation error
+#: below 0,05 mm; that is half the finger position resolution of the RG6.
 STEP_RAD = 0.05
 DRIVER = "rg6_finger_joint"
 

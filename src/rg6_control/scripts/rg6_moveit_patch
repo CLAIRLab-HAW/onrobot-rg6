@@ -1,55 +1,57 @@
 #!/usr/bin/env python3
-"""rg6_moveit_patch: macht den OnRobot RG6 in der Clearpath-MoveIt-Config nutzbar.
+"""rg6_moveit_patch: makes the OnRobot RG6 usable in the Clearpath MoveIt config.
 
-Der Clearpath-Generator kennt keinen OnRobot-Greifer (robot.yaml hat dafuer
-keinen Hebel), erzeugt aber bei jedem Boot robot.srdf + moveit.yaml neu. Dieses
-Tool patcht deshalb NACH der Generierung (idempotent, .bak, atomar - Stil
+The Clearpath generator knows no OnRobot gripper (robot.yaml has no lever for
+it), but regenerates robot.srdf + moveit.yaml on every boot. This tool
+therefore patches AFTER the generation (idempotent, .bak, atomic - the style of
 clearpath-custom-setup.py):
 
-  1. <setup>/robot.srdf                       (das von moveit.launch.py geladene,
-     vom moveit_collision_updater erzeugte SRDF; die RG6-Kollisionspaare stehen
-     dort schon, weil der Updater das volle URDF inkl. platform.extras sieht):
-       + Planungsgruppe 'gripper' (Treibergelenk rg6_finger_joint) MIT
-         den 5 Folgegelenken als <joint> in der Gruppe. Zusammen mit dem
-         URDF-<mimic> (rg6_description) werden sie als mimic_joints_ aus
-         finger_joint abgeleitet -> saubere Preview von Oeffnen/Schliessen,
-         ohne aktiv geplant zu werden (active DOF bleibt 1).
+  1. <setup>/robot.srdf                       (the SRDF loaded by moveit.launch.py
+     and produced by the moveit_collision_updater; the RG6 collision pairs are
+     already in there, because the updater sees the full URDF including
+     platform.extras):
+       + planning group 'gripper' (driver joint rg6_finger_joint) WITH the
+         5 dependent joints as <joint> in the group. Together with the
+         URDF <mimic> (rg6_description) they are derived as mimic_joints_ from
+         finger_joint -> a clean preview of opening/closing, without being
+         actively planned (the active DOF stays 1).
        + group_states 'open'/'close'
        + end_effector 'rg6' parent_group arm_0, parent_link arm_0_wrist_3_link
-         (tiefstes arm_0-Mitglied; tool0 ist kein arm_0-Member, s. Kommentar am
-         SRDF_FRAGMENT_TEMPLATE)
-       + GENAU DREI <disable_collisions>: moment_arm<->finger_tip je Finger,
-       und flex_finger<->flex_finger zwischen den Fingern. Nur diese drei: der
-       moveit_collision_updater erzeugt mit dem rg6_v2-Modell 82 Greiferpaare
-       selbst und korrekt benannt, diese drei aber NICHT -- die ersten beiden,
-       weil sie ueber den ganzen Hub in Kontakt sind, das dritte, weil es nur
-       in den letzten 1,3 % des Hubs in Kontakt ist (s. Kommentar am
+         (the deepest arm_0 member; tool0 is not an arm_0 member, see the
+         comment at SRDF_FRAGMENT_TEMPLATE)
+       + EXACTLY THREE <disable_collisions>: moment_arm<->finger_tip per finger,
+       and flex_finger<->flex_finger between the fingers. Only these three: with
+       the rg6_v2 model the moveit_collision_updater produces 82 gripper pairs
+       itself and names them correctly, but NOT these three -- the first two
+       because they are in contact over the whole stroke, the third because it
+       is in contact only in the last 1,3 % of the stroke (see the comment at
        SRDF_FRAGMENT_TEMPLATE).
-  2. <setup>/manipulators/config/moveit.yaml wird NICHT gepatcht, nur
-     GEPRUEFT. Beide Eintraege stehen in robot.yaml unter
-     manipulators.moveit.ros_parameters.move_group, und der Clearpath-
-     Generator schreibt sie selbst in moveit.yaml (deep-merge, empirisch
-     verifiziert -- s. CHANGELOG):
-       + moveit_simple_controller_manager: GripperCommand-Controller
+  2. <setup>/manipulators/config/moveit.yaml is NOT patched, only
+     CHECKED. Both entries live in robot.yaml under
+     manipulators.moveit.ros_parameters.move_group, and the Clearpath
+     generator writes them into moveit.yaml itself (deep merge, verified
+     empirically -- see the CHANGELOG):
+       + moveit_simple_controller_manager: GripperCommand controller
          'manipulators/rg6_gripper_controller' (action_ns gripper_cmd) ->
-         bedient von rg6_grip_bridge am Roboter, von rg6_control_sim im Mock
-         (beide unter demselben Namen rg6_gripper_controller/gripper_cmd)
+         served by rg6_grip_bridge on the robot, by rg6_control_sim in the mock
+         (both under the same name rg6_gripper_controller/gripper_cmd)
        + robot_description_planning.joint_limits.rg6_finger_joint
-         (Beschleunigungslimit fuer TOTG-Zeitparametrierung)
-     Grund fuer den Umzug: robot.yaml ist die versionierte SSOT (husky-custom-
-     setup) und gilt fuer Roboter UND Offboard-Container zugleich; der SRDF-
-     Teil hat dagegen keinen Hebel in robot.yaml (clearpath_config kennt das
-     Wort 'srdf' nicht, und Gripper.MODEL ist ein geschlossenes Enum ohne RG6).
-     verify_moveit_yaml quittiert mit Exit-Code 1, wenn die Werte fehlen --
-     sonst faellt eine veraltete robot.yaml erst auf, wenn MoveIt den Greifer
-     nicht mehr ansteuern kann.
+         (acceleration limit for the TOTG time parameterisation)
+     The reason for the move: robot.yaml is the versioned SSOT (husky-custom-
+     setup) and holds for the robot AND the offboard container at the same
+     time; the SRDF part, by contrast, has no lever in robot.yaml
+     (clearpath_config does not know the word 'srdf', and Gripper.MODEL is a
+     closed enum without the RG6).
+     verify_moveit_yaml acknowledges with exit code 1 when the values are
+     missing -- otherwise an outdated robot.yaml only shows up once MoveIt can
+     no longer command the gripper.
 
-Aufrufe:
-  Roboter:  aus clearpath-custom-setup.py (per Boot, vor clearpath-manipulators)
-  Offboard: husky-offboard entrypoint.sh nach den generate_*-Laeufen
-  Manuell:  rg6_moveit_patch --setup-path /etc/clearpath
+Invocations:
+  Robot:    from clearpath-custom-setup.py (per boot, before clearpath-manipulators)
+  Offboard: husky-offboard entrypoint.sh after the generate_* runs
+  Manual:   rg6_moveit_patch --setup-path /etc/clearpath
 
-Selbst-enthaltend: braucht nur python3 + PyYAML (kein ROS-Environment).
+Self-contained: needs only python3 + PyYAML (no ROS environment).
 """
 
 import argparse
@@ -65,78 +67,79 @@ TAG = "rg6_moveit_patch"
 MARKER_BEGIN = "<!-- onrobot-rg6:BEGIN (rg6_moveit_patch; nicht von Hand editieren) -->"
 MARKER_END = "<!-- onrobot-rg6:END -->"
 
-# Zweiter Marker-Block: deaktiviert alle Intra-Greifer-Self-Collision-Paare, damit
-# MoveIt mit artikulierten Finger-Collision-Geometrien planen kann. Ohne diesen
-# Block wuerden die 4-Barlenk-Schleife, die Kamera-auf-Greiferbasis-Montage und
-# die Fingerspitzen-gegeneinander als Selbstkollision die Planung blockieren (das
-# war der historische Grund, den Greifer collision-los als 'Anzeige-only' zu
-# modellieren). Laeuft NACH moveit_collision_updater, der /clearpath/robot.srdf
-# bei jedem Start neu erzeugt (mit Finger-Paaren, sobald die Finger Collision-
-# Geometrie haben). Gegen die WELT (Tisch, Objekt, andere Arm-Links) prueft der
-# Greifer weiterhin - nur die Intra-Assembly-Paare fallen weg.
-# Muss zu rg6_control/rg6_joint_state_broadcaster passen (0 = offen, + = zu)
-# und zu den Gelenknamen aus rg6_description (Praefix 'rg6_').
+# Second marker block: disables all intra-gripper self-collision pairs so that
+# MoveIt can plan with articulated finger collision geometries. Without this
+# block the four-bar linkage loop, the camera-on-gripper-base mount and the
+# finger tips against each other would block planning as self-collisions (that
+# was the historical reason for modelling the gripper without collision as
+# 'display only'). Runs AFTER the moveit_collision_updater, which regenerates
+# /clearpath/robot.srdf on every start (with finger pairs, as soon as the
+# fingers have collision geometry). Against the WORLD (table, object, other arm
+# links) the gripper is still checked - only the intra-assembly pairs fall away.
+# Has to match rg6_control/rg6_joint_state_broadcaster (0 = open, + = closed)
+# and the joint names from rg6_description (prefix 'rg6_').
 #
-# Die 5 Folgegelenke stehen als <joint> IN der gripper-Gruppe, nicht als
-# top-level <passive_joint>: MoveIt nimmt in addJointModelGroup NUR explizit
-# gelistete Joints/Links/Chains/Subgroups in die Gruppe auf - es gibt KEIN
-# Auto-Add von mimic-Abhaengigen. Erst als Gruppenmitglied werden sie vom
-# JointModelGroup-Konstruktor anhand des URDF-<mimic> (getMimic()!=nullptr) als
-# mimic_joints_ klassifiziert -> nicht aktiv geplant (active DOF bleibt 1 =
-# {prefix}finger_joint, GripperCommand-Controller unverändert), ABER Teil der
-# Planungs-Trajektorie und per group_mimic_update_ aus finger_joint abgeleitet
-# -> saubere Animation aller 6 Gelenke im MoveIt-Planungs-Preview. Ohne diese
-# Aufnahme animiert MoveIt nur rg6_finger_joint ("nur ein Finger bewegt sich").
-# DIE DREI disable_collisions-PAARE, und warum es genau diese sind.
+# The 5 dependent joints stand as <joint> IN the gripper group, not as
+# top-level <passive_joint>: in addJointModelGroup MoveIt takes ONLY explicitly
+# listed joints/links/chains/subgroups into the group - there is NO auto-add of
+# mimic dependants. Only as a group member are they classified by the
+# JointModelGroup constructor, on the basis of the URDF <mimic>
+# (getMimic()!=nullptr), as mimic_joints_ -> not actively planned (the active
+# DOF stays 1 = {prefix}finger_joint, the GripperCommand controller unchanged),
+# BUT part of the planning trajectory and derived from finger_joint via
+# group_mimic_update_ -> a clean animation of all 6 joints in the MoveIt
+# planning preview. Without including them, MoveIt animates only
+# rg6_finger_joint ("only one finger moves").
+# THE THREE disable_collisions PAIRS, and why it is exactly these.
 #
-# Der moveit_collision_updater sampelt Stellungen und deaktiviert, was er dabei
-# beruehren sieht. Fuer das rg6_v2-Modell liefert er 82 Greiferpaare -- darunter
-# fast alle Kreuzpaare Finger 1 <-> Finger 2 und die direkten Nachbarn
-# moment_arm<->truss_arm und finger_tip<->truss_arm als "Adjacent". NICHT
-# darunter: moment_arm<->finger_tip DESSELBEN Fingers, und das eine Kreuzpaar
+# The moveit_collision_updater samples poses and disables what it sees touching
+# while doing so. For the rg6_v2 model it delivers 82 gripper pairs -- among
+# them almost all cross pairs finger 1 <-> finger 2 and the direct neighbours
+# moment_arm<->truss_arm and finger_tip<->truss_arm as "Adjacent". NOT among
+# them: moment_arm<->finger_tip of the SAME finger, and the single cross pair
 # flex_finger<->flex_finger.
 #
-# In der Viergelenkkette moment_arm -> truss_arm -> finger_tip sind diese beiden
-# Glieder zwei Gelenke auseinander und trotzdem dauerhaft in Beruehrung. Am
-# 2026-08-19 am laufenden move_group ueber den ganzen Hub gemessen
-# (check_state_validity, rg6_finger_joint 0,0 bis 1,25478): in JEDER Stellung
-# zwei Kontakte, immer dieses Paar. Folge war nicht etwa eine schlechtere
-# Planung, sondern GAR KEINE:
+# In the four-bar chain moment_arm -> truss_arm -> finger_tip these two links
+# are two joints apart and still permanently in contact. Measured on
+# 2026-08-19 on the running move_group over the whole stroke
+# (check_state_validity, rg6_finger_joint 0,0 to 1,25478): in EVERY pose two
+# contacts, always this pair. The consequence was not a worse plan but NO plan
+# at all:
 #
 #   ERROR move_group  PlanningRequestAdapter 'CheckStartStateCollision' failed,
 #   because '2 contact(s) detected : rg6_gripper_finger_1_finger_tip -
 #   rg6_gripper_finger_1_moment_arm, ...'. Aborting planning pipeline.
 #
-# reason="Default" statt "Adjacent": die beiden Links sind im URDF keine
-# Nachbarn. "Default" ist die Kategorie fuer "beruehren sich in der
-# Standardstellung", und das trifft hier zu -- in jeder Stellung.
+# reason="Default" instead of "Adjacent": the two links are not neighbours in
+# the URDF. "Default" is the category for "touch each other in the default
+# pose", and that applies here -- in every pose.
 #
-# DAS DRITTE PAAR: flex_finger <-> flex_finger, die beiden Gummipads.
+# THE THIRD PAIR: flex_finger <-> flex_finger, the two rubber pads.
 #
-# Es fehlt aus dem umgekehrten Grund. Die Pads beruehren sich NUR ganz am Ende
-# des Hubs, und das Sampling des Updaters landet dort praktisch nie -- fuer ihn
-# ist das Paar "manchmal in Kollision" und bleibt aktiv. Am 2026-08-20 am
-# laufenden move_group ausgemessen (check_state_validity, Bisektion):
+# It is missing for the opposite reason. The pads touch ONLY at the very end of
+# the stroke, and the updater's sampling practically never lands there -- to it
+# the pair is "sometimes in collision" and stays active. Measured on 2026-08-20
+# on the running move_group (check_state_validity, bisection):
 #
-#   letzte gueltige Stellung  1,238486 rad  ->  3,01 mm lichte Weite
-#   erste kollidierende       1,238486 rad
-#   Kontaktband               0,016294 rad  =  1,3 % des Hubs
+#   last valid pose           1,238486 rad  ->  3,01 mm clear width
+#   first colliding           1,238486 rad
+#   contact band              0,016294 rad  =  1,3 % of the stroke
 #
-# Der Hub geht von 153,17 mm (offen) auf 0,40 mm (zu). Solange das Paar aktiv
-# war, verweigerte move_group also JEDE Stellung enger als 3 mm -- waehrend
-# dieselbe SRDF einen group_state "close" bei 1,25478 rad anbot. Das Modell
-# verbot seinen eigenen Named State, und nichts duenner als 3 mm war greifbar.
+# The stroke goes from 153,17 mm (open) to 0,40 mm (closed). So as long as the
+# pair was active, move_group refused EVERY pose narrower than 3 mm -- while
+# the same SRDF offered a group_state "close" at 1,25478 rad. The model
+# forbade its own named state, and nothing thinner than 3 mm was graspable.
 #
-# Freigegeben statt "close" entschaerft, weil die Selbstkollisionspruefung den
-# Roboter vor sich selbst schuetzen soll: ein leer zufahrender Greifer ist der
-# Normalfall, den die Hardware bei jedem Griff ausfuehrt, und die zwei Pads
-# SIND die Greifflaechen. Dass sie bei 0,4 mm Spalt aneinanderstossen, ist der
-# geschlossene Greifer und keine Selbstkollision. Der echte Anschlag bleibt das
-# Gelenklimit (1,25478 rad); daran aendert die Freigabe nichts.
+# Released rather than "close" defused, because the self-collision check is
+# meant to protect the robot from itself: a gripper closing on nothing is the
+# normal case the hardware performs on every grasp, and the two pads ARE the
+# gripping faces. That they meet at a 0,4 mm gap is the closed gripper and no
+# self-collision. The real end stop remains the joint limit (1,25478 rad); the
+# release changes nothing about that.
 #
-# reason="User": weder "Adjacent" (im URDF keine Nachbarn) noch "Default" (in
-# der Standardstellung stehen sie 153 mm auseinander) trifft zu. "User" ist die
-# Kategorie fuer eine bewusste Freigabe, und genau das ist es.
+# reason="User": neither "Adjacent" (not neighbours in the URDF) nor "Default"
+# (in the default pose they stand 153 mm apart) applies. "User" is the category
+# for a deliberate release, and that is exactly what this is.
 #
 SRDF_FRAGMENT_TEMPLATE = """\
     <group name="{gripper_group}">
@@ -157,22 +160,22 @@ SRDF_FRAGMENT_TEMPLATE = """\
         <joint name="{prefix}finger_joint" value="{angle_closed}"/>
     </group_state>
     <end_effector name="rg6" parent_link="{parent_link}" parent_group="{parent_group}" group="{gripper_group}"/>"""
-# parent_link = arm_0_wrist_3_link (NICHT arm_0_tool0) + explizites
-# parent_group="arm_0". Grund: moveit_core::RobotModel::buildGroupsInfoEndEffectors
-# fordert fuer die EE-Elterngruppe hasLinkModel(parent_link) auf parent_group.
-# Clearpaths arm_0 ist joint-basiert (6 UR-Gelenke shoulder_pan..wrist_3); ihre
-# Member-Links reichen bis arm_0_wrist_3_link. arm_0_tool0 (und flange) sind feste
-# Kind-Links von wrist_3_link JENSEITS des letzten Gelenks -> KEINE Mitglieder von
-# arm_0 (und keiner anderen Gruppe). Folgen:
-#   * parent_link=arm_0_tool0 OHNE parent_group  -> possible_parent_groups leer
+# parent_link = arm_0_wrist_3_link (NOT arm_0_tool0) + an explicit
+# parent_group="arm_0". Reason: moveit_core::RobotModel::buildGroupsInfoEndEffectors
+# demands hasLinkModel(parent_link) on parent_group for the EE parent group.
+# Clearpath's arm_0 is joint-based (6 UR joints shoulder_pan..wrist_3); its
+# member links reach up to arm_0_wrist_3_link. arm_0_tool0 (and flange) are fixed
+# child links of wrist_3_link BEYOND the last joint -> NOT members of arm_0 (nor
+# of any other group). Consequences:
+#   * parent_link=arm_0_tool0 WITHOUT parent_group  -> possible_parent_groups empty
 #     -> WARN "Could not identify parent group for end-effector 'rg6'",
-#        setEndEffectorParent("", ...) -> Greifer nicht an arm_0 angebunden.
-#   * parent_link=arm_0_tool0 MIT parent_group=arm_0 -> ERROR
+#        setEndEffectorParent("", ...) -> gripper not attached to arm_0.
+#   * parent_link=arm_0_tool0 WITH parent_group=arm_0 -> ERROR
 #     "Group 'arm_0' ... does not include the parent link 'arm_0_tool0'".
-# arm_0_wrist_3_link ist das tiefste Link IN arm_0 und URDF-Vorfahre des Greifers
-# -> beides verschwindet, arm_0.attachEndEffector('rg6') wird gerufen. wrist_3_link
-# vs tool0 differiert nur um die feste Flansch-Transform; Greifer-Posen/IK laufen
-# ueber den vollen kinematischen Baum bzw. den Gripper-TCP -> ohne Auswirkung.
+# arm_0_wrist_3_link is the deepest link IN arm_0 and a URDF ancestor of the
+# gripper -> both go away, and arm_0.attachEndEffector('rg6') is called.
+# wrist_3_link vs tool0 differ only by the fixed flange transform; gripper poses
+# and IK run over the full kinematic tree resp. the gripper TCP -> no effect.
 
 
 def log(msg, err=False):
@@ -199,7 +202,7 @@ def atomic_write(path, content):
 
 # --------------------------- SRDF ------------------------------------------
 def patch_srdf(path, args):
-    """Fuegt den RG6-Block (Marker-gerahmt) vor </robot> ein bzw. erneuert ihn."""
+    """Inserts the RG6 block (marker-framed) before </robot>, or refreshes it."""
     if not os.path.isfile(path):
         log(f"WARN: SRDF nicht gefunden, uebersprungen: {path} "
             "(generate_semantic_description gelaufen?)", err=True)
@@ -219,7 +222,7 @@ def patch_srdf(path, args):
     block = f"    {MARKER_BEGIN}\n{fragment}\n    {MARKER_END}\n"
 
     if MARKER_BEGIN in content:
-        # vorhandenen Block ersetzen (Update-Faehigkeit)
+        # replace an existing block (update capability)
         rx = re.compile(
             r"[ \t]*" + re.escape(MARKER_BEGIN) + r".*?" + re.escape(MARKER_END) + r"\n?",
             re.DOTALL)
@@ -236,13 +239,13 @@ def patch_srdf(path, args):
         new_content = content[:idx] + block + content[idx:]
         action = "eingefuegt"
 
-    # Wohlgeformtheit sicherstellen, bevor irgendetwas geschrieben wird.
+    # Make sure it is well-formed before anything is written.
     try:
         root = ET.fromstring(new_content)
     except ET.ParseError as e:
         log(f"FEHLER: gepatchtes SRDF nicht wohlgeformt ({e}) - keine Aenderung.", err=True)
         return False
-    # Duplikate vermeiden: Gruppe darf nur aus unserem Block stammen.
+    # Avoid duplicates: the group may only come from our own block.
     groups = [g.get("name") for g in root.findall("group")]
     if groups.count(args.gripper_group) > 1:
         log(f"FEHLER: Gruppe '{args.gripper_group}' mehrfach im SRDF - keine Aenderung.",
@@ -256,15 +259,16 @@ def patch_srdf(path, args):
 
 # --------------------------- moveit.yaml ------------------------------------
 def verify_moveit_yaml(path, args):
-    """Pruefen (NICHT patchen), ob robot.yaml die MoveIt-Greiferwerte geliefert hat.
+    """Check (do NOT patch) whether robot.yaml has delivered the MoveIt gripper values.
 
-    Beide Eintraege kommen aus robot.yaml durch den Clearpath-Generator.
-    Faellt einer weg -- alte robot.yaml, vertippter Key,
-    Generator ohne den Merge --, dann startet move_group klaglos und der
-    Greifer ist erst dann als fehlend zu erkennen, wenn ein GripperCommand-Goal
-    ins Leere laeuft. Diese Pruefung macht daraus eine sichtbare Meldung.
+    Both entries come from robot.yaml through the Clearpath generator.
+    If one of them drops out -- an old robot.yaml, a mistyped key, a
+    generator without the merge --, then move_group starts without complaint
+    and the gripper can only be recognised as missing once a GripperCommand
+    goal runs into the void. This check turns that into a visible message.
 
-    Rueckgabe: True = alles da, False = etwas fehlt (Aufrufer -> Exit-Code 1).
+    :returns: True = everything is there, False = something is missing
+        (the caller then exits with code 1).
     """
     try:
         import yaml
@@ -283,7 +287,7 @@ def verify_moveit_yaml(path, args):
         log(f"WARN: {path} hat unerwartetes Format, nicht geprueft.", err=True)
         return True
 
-    # Top-Level = Namespace-Key (z. B. 'a200_0553') -> move_group.ros__parameters
+    # top level = the namespace key (e.g. 'a200_0553') -> move_group.ros__parameters
     params = None
     for ns_val in data.values():
         if isinstance(ns_val, dict) and "move_group" in ns_val:
@@ -346,10 +350,10 @@ def main():
                         help="Parent-Link des EE - MUSS ein Mitglied der parent_group "
                              "sein (default: arm_0_wrist_3_link; NICHT arm_0_tool0, da "
                              "tool0 kein Mitglied der joint-basierten arm_0-Gruppe ist)")
-    # Aus der Getriebekinematik des rg6_v2 (finger_kinematics.hpp, erzeugt von
-    # tools/derive_finger_kinematics.py), nicht geschaetzt.  Geschaetzte
-    # Endwerte backen eine halb offene und eine nicht ganz geschlossene Hand
-    # als SRDF-Gruppenzustaende "open"/"close" ein.
+    # From the linkage kinematics of the rg6_v2 (finger_kinematics.hpp,
+    # produced by tools/derive_finger_kinematics.py), not estimated.  Estimated
+    # end values bake a half-open and a not-quite-closed hand into the SRDF
+    # group states "open"/"close".
     parser.add_argument("--angle-open", default="0.0",
                         help="rg6_finger_joint-Winkel 'open' -- groesste "
                              "darstellbare Weite, 153,2 mm (default: 0.0)")
@@ -367,15 +371,15 @@ def main():
     setup = args.setup_path.rstrip("/")
     log(f"Start (setup: {setup}).")
     patch_srdf(os.path.join(setup, "robot.srdf"), args)
-    # Nur noch Kontrolle: moveit.yaml wird vom Clearpath-Generator aus
-    # robot.yaml befuellt (s. Modul-Docstring). Exit-Code 1 statt stiller
-    # Fahrt ohne Greifer-Controller; kein Abbruch beim Aufrufer, beide
-    # Einbindungen (Installer, offboard-entrypoint) loggen ihn nur.
+    # Only a check now: moveit.yaml is filled by the Clearpath generator from
+    # robot.yaml (see the module docstring). Exit code 1 instead of silently
+    # running without a gripper controller; no abort for the caller, both
+    # call sites (installer, offboard entrypoint) only log it.
     ok = verify_moveit_yaml(
         os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
     if not ok:
-        # Auch auf stdout: wer nur den einen Stream liest (docker logs mischt
-        # beide unsortiert), soll das Scheitern trotzdem sehen.
+        # On stdout as well: whoever reads only one stream (docker logs mixes
+        # both unsorted) should still see the failure.
         log("Fertig - ABER moveit.yaml-Pruefung fehlgeschlagen (Details auf stderr).")
         return 1
     log("Fertig.")

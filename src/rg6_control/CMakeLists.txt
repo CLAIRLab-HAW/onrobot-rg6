@@ -19,15 +19,15 @@ add_executable(joint_state_aggregator src/joint_state_aggregator.cpp)
 add_executable(joint_state_relay src/joint_state_relay.cpp)
 
 # Link libraries
-# Die Getriebetabelle (Gelenkwinkel <-> Weite) liegt als generierter Header in
-# include/ -- erzeugt aus dem URDF des Greifermodells, damit der Sim nicht
-# stillschweigend anders rechnet als der Roboter.
+# The linkage table (joint angle <-> width) lives as a generated header in
+# include/ -- produced from the URDF of the gripper model, so that the sim does
+# not silently compute differently from the robot.
 target_include_directories(rg6_control_sim PRIVATE include)
 
 
-# Sim-Node: dieselbe ROS-Oberflaeche, die der Greifer am Roboter hat --
-# GripperCommand-Action, Treibergelenk auf joint_states und rg6/bridge_state --
-# nur ohne Hardware.  ur_msgs ist mit dem Realtreiber weggefallen.
+# Sim node: the same ROS surface the gripper has on the robot --
+# GripperCommand action, driver joint on joint_states and rg6/bridge_state --
+# only without hardware.  ur_msgs went away together with the real driver.
 target_link_libraries(rg6_control_sim
   rclcpp::rclcpp
   rclcpp_action::rclcpp_action
@@ -59,11 +59,12 @@ install(PROGRAMS scripts/rg6_moveit_patch
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# BUILD_TESTING: hier steht nichts.  Der RG6 haengt an der OnRobot-URCap, nicht
-# am Tool-Anschluss -- es gibt keine Kennlinie und kein Analogmodell mehr, die
-# sich hier pruefen liessen.  Was der Greifer im Container tut, prueft eine E2E
-# gegen den laufenden Stack: plan-bridge/tests/test_offboard_gripper.py.
-# Bewusst KEIN ament_lint_auto: die bestehenden Quellen sind nie gelintet
-# worden, das nachtraeglich zu erzwingen wuerde den Build fuer alle brechen.
+# BUILD_TESTING: nothing stands here.  The RG6 hangs off the OnRobot URCap, not
+# off the tool connector -- there is no characteristic curve and no analogue
+# model left that could be checked here.  What the gripper does in the container
+# is checked by an E2E against the running stack:
+# plan-bridge/tests/test_offboard_gripper.py.
+# Deliberately NO ament_lint_auto: the existing sources have never been linted,
+# and enforcing it after the fact would break the build for everyone.
 
 ament_package()

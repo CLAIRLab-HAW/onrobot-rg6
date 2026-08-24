@@ -1,11 +1,11 @@
 limit:
   lower: 0.0
-  # Upstream: 1.3.  Hier geklemmt, weil die Finger dort SCHON
-  # DURCHEINANDER durch sind: die lichte Weite faellt bis q = 1,25478 auf 0
-  # und steigt danach wieder an (bei 1,3 zeigt das Modell 6,8 mm, mit
-  # gekreuzten Fingern).  Ein Planer haette dort eine Oeffnung gesehen, die es
-  # nicht gibt.  Nachgerechnet per Vorwaertskinematik ueber die
-  # flex_finger-Greifflaechen, Bisektion auf den Nulldurchgang.
+  # Upstream: 1.3.  Clamped here, because at that point the fingers have
+  # ALREADY passed THROUGH each other: the clear width falls to 0 at
+  # q = 1,25478 and rises again beyond it (at 1,3 the model shows 6,8 mm, with
+  # crossed fingers).  A planner would have seen an opening there that does not
+  # exist.  Recomputed by forward kinematics over the flex_finger gripping
+  # faces, bisection onto the zero crossing.
   upper: 1.25478
   effort: 10.0
   velocity: 0.5

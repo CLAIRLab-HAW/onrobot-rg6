@@ -3,16 +3,16 @@
 <package format="3">
   <name>rg6_msgs</name>
   <version>0.2.0</version>
-  <description>Nachrichten/Services des STILLGELEGTEN OnRobot-RG6-Treibers
-    (rg6_control, Tool-DO-Pfad, entfallen am 2026-08-19).  Kein laufender Node
-    benutzt sie mehr -- der Greifer spricht ueber die GripperCommand-Action und
-    meldet seinen Zustand als JSON auf rg6/bridge_state.
+  <description>Messages/services of the DECOMMISSIONED OnRobot RG6 driver
+    (rg6_control, tool-DO path, dropped on 2026-08-19).  No running node uses
+    them any more -- the gripper speaks via the GripperCommand action and
+    reports its state as JSON on rg6/bridge_state.
 
-    NICHT LOESCHEN: alle fuenf Aufnahmen in clearpath/data/recordings/ (Stand
-    2026-07-31) enthalten /a200_0553/manipulators/rg6/state vom Typ
-    rg6_msgs/msg/GripperState.  Ohne dieses Paket sind sie nicht mehr
-    abspielbar -- das Paket ist die Typdefinition eines Archivs, keine
-    Altlast.</description>
+    DO NOT DELETE: all five recordings in clearpath/data/recordings/ (as of
+    2026-07-31) contain /a200_0553/manipulators/rg6/state of type
+    rg6_msgs/msg/GripperState.  Without this package they can no longer be
+    replayed -- the package is the type definition of an archive, not dead
+    weight.</description>
   <maintainer email="hannes.voss@haw-hamburg.de">Hannes Voss</maintainer>
   <license>BSD-3-Clause</license>
 

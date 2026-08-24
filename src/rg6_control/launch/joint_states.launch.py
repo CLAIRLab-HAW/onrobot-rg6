@@ -43,16 +43,18 @@ def generate_launch_description():
         namespace=NAMESPACE,
         name="joint_state_aggregator",
         output="screen",
-        parameters=[{
-            # relative Namen -> im /a200_0553-Namespace aufgeloest.
-            "source_topics": [
-                "platform/joint_states",                   # Raeder
-                "manipulators/joint_states",               # Arm
-                "manipulators/endeffectors/joint_states",  # Greifer
-            ],
-            "output_topic": "joint_states",  # -> /a200_0553/joint_states
-            "publish_rate": 50.0,
-        }],
+        parameters=[
+            {
+                # relative Namen -> im /a200_0553-Namespace aufgeloest.
+                "source_topics": [
+                    "platform/joint_states",  # Raeder
+                    "manipulators/joint_states",  # Arm
+                    "manipulators/endeffectors/joint_states",  # Greifer
+                ],
+                "output_topic": "joint_states",  # -> /a200_0553/joint_states
+                "publish_rate": 50.0,
+            }
+        ],
     )
 
     # Legacy-Bus am Leben halten: Arm + Greifer zurueck auf platform/joint_states,
@@ -65,14 +67,16 @@ def generate_launch_description():
         namespace=NAMESPACE,
         name="joint_state_relay",
         output="screen",
-        parameters=[{
-            "input_topics": [
-                "manipulators/joint_states",
-                "manipulators/endeffectors/joint_states",
-            ],
-            "output_topic": "platform/joint_states",  # -> /a200_0553/platform/joint_states
-            "depth": 20,
-        }],
+        parameters=[
+            {
+                "input_topics": [
+                    "manipulators/joint_states",
+                    "manipulators/endeffectors/joint_states",
+                ],
+                "output_topic": "platform/joint_states",  # -> /a200_0553/platform/joint_states
+                "depth": 20,
+            }
+        ],
     )
 
     return LaunchDescription([aggregator, relay])

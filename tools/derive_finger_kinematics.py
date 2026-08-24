@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """Leitet die Tabelle Gelenkwinkel -> Greifweite aus einem GENERIERTEN URDF ab.
 
-Warum aus dem URDF und nicht aus einer Formel:  die Finger des rg6_v2 sind eine
-Viergelenkkette (moment_arm -> truss_arm -> finger_tip -> flex_finger), alle
-drei per ``mimic`` am selben Winkel.  Es gibt keine geschlossene Formel dafuer,
-und eine danebengestellte Naeherung waere genau die Zweitfassung, an der das
-alte Modell und sein Treiber schon einmal auseinandergelaufen sind (R19).
+Warum aus dem URDF und nicht aus einer Formel:  die Finger des rg6_v2 sind eine Viergelenkkette (moment_arm -> truss_arm
+-> finger_tip -> flex_finger), alle drei per ``mimic`` am selben Winkel.  Es gibt keine geschlossene Formel dafuer, und
+eine danebengestellte Naeherung waere genau die Zweitfassung, an der das alte Modell und sein Treiber schon einmal
+auseinandergelaufen sind (R19).
 
-Warum eine TABELLE und kein Import:  die Greiferbruecke laeuft auf dem Roboter
-und soll dort nichts importieren muessen, was nicht zum Roboter gehoert.  Eine
-Tabelle ist Daten, kein Paket -- sie kostet keine Abhaengigkeit, und eine
-veraltete Tabelle ist eine sichtbare Datei mit Datum statt einer stillen
-Abweichung.
+Warum eine TABELLE und kein Import:  die Greiferbruecke laeuft auf dem Roboter und soll dort nichts importieren muessen,
+was nicht zum Roboter gehoert.  Eine Tabelle ist Daten, kein Paket -- sie kostet keine Abhaengigkeit, und eine veraltete
+Tabelle ist eine sichtbare Datei mit Datum statt einer stillen Abweichung.
 
     xacro robot.urdf.xacro > /tmp/robot.urdf
     python3 derive_finger_kinematics.py /tmp/robot.urdf \\
@@ -19,11 +16,9 @@ Abweichung.
     python3 derive_finger_kinematics.py /tmp/robot.urdf --format cpp \\
         > src/rg6_control/include/rg6_control/finger_kinematics.hpp
 
-Zwei Ausgabeformate, EINE Quelle.  Die Tabelle wird an zwei Stellen gebraucht,
-die einander nicht importieren koennen:  die Greiferbruecke auf dem Roboter
-liest sie als JSON, ``rg6_control_sim`` im Container braucht sie in C++.  Sie
-zweimal von Hand zu pflegen ist genau die Zweitfassung, vor der der Absatz
-oben warnt -- deshalb erzeugt dieses Skript beide.
+Zwei Ausgabeformate, EINE Quelle.  Die Tabelle wird an zwei Stellen gebraucht, die einander nicht importieren koennen:
+die Greiferbruecke auf dem Roboter liest sie als JSON, ``rg6_control_sim`` im Container braucht sie in C++.  Sie zweimal
+von Hand zu pflegen ist genau die Zweitfassung, vor der der Absatz oben warnt -- deshalb erzeugt dieses Skript beide.
 """
 
 from __future__ import annotations

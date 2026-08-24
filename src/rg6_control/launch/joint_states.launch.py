@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Robot-weite joint_states-Aggregation + Legacy-Bus-Relay fuer a200_0553.
 
-Hintergrund (Multi-CM-Clearpath): Raeder-, Arm- und Greifer-joint_states kommen aus
-DREI getrennten Quellen und werden nicht automatisch zu einem vollstaendigen
-/joint_states zusammengefuehrt. Dieses Launch stellt her:
+Hintergrund (Multi-CM-Clearpath): Raeder-, Arm- und Greifer-joint_states kommen aus DREI getrennten Quellen und werden
+nicht automatisch zu einem vollstaendigen /joint_states zusammengefuehrt. Dieses Launch stellt her:
 
   1. joint_state_aggregator: fasst die (partiellen) Quellen zu EINEM vollstaendigen
      /a200_0553/joint_states zusammen (mit velocity+effort) -> fuer rosbag/Foxglove.
@@ -57,10 +56,9 @@ def generate_launch_description():
         ],
     )
 
-    # Legacy-Bus am Leben halten: Arm + Greifer zurueck auf platform/joint_states,
-    # RELIABLE (fuer den reliable move_group-Subscriber; siehe joint_state_relay.cpp).
-    # Die Subscriptions reconnecten automatisch, wenn clearpath-manipulators (und
-    # damit der Arm-JSB) neu startet.
+    # Legacy-Bus am Leben halten: Arm + Greifer zurueck auf platform/joint_states, RELIABLE (fuer den reliable
+    # move_group-Subscriber; siehe joint_state_relay.cpp). Die Subscriptions reconnecten automatisch, wenn
+    # clearpath-manipulators (und damit der Arm-JSB) neu startet.
     relay = Node(
         package="rg6_control",
         executable="joint_state_relay",

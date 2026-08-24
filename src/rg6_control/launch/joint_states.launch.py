@@ -69,10 +69,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
-                "input_topics": [
-                    "manipulators/joint_states",
-                    "manipulators/endeffectors/joint_states",
-                ],
+                "input_topics": ["manipulators/joint_states", "manipulators/endeffectors/joint_states"],
                 "output_topic": "platform/joint_states",  # -> /a200_0553/platform/joint_states
                 "depth": 20,
             }

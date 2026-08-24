@@ -42,14 +42,7 @@ DRIVER = "rg6_finger_joint"
 
 
 def _rpy_to_R(r, p, y):
-    cr, sr, cp, sp, cy, sy = (
-        np.cos(r),
-        np.sin(r),
-        np.cos(p),
-        np.sin(p),
-        np.cos(y),
-        np.sin(y),
-    )
+    cr, sr, cp, sp, cy, sy = (np.cos(r), np.sin(r), np.cos(p), np.sin(p), np.cos(y), np.sin(y))
     return np.array(
         [
             [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
@@ -72,30 +65,9 @@ def _kette(urdf):
         K[ch.get("link")] = dict(
             parent=par.get("link"),
             typ=j.get("type"),
-            xyz=np.array(
-                [
-                    float(v)
-                    for v in (
-                        (o.get("xyz") if o is not None else None) or "0 0 0"
-                    ).split()
-                ]
-            ),
-            rpy=np.array(
-                [
-                    float(v)
-                    for v in (
-                        (o.get("rpy") if o is not None else None) or "0 0 0"
-                    ).split()
-                ]
-            ),
-            axis=np.array(
-                [
-                    float(v)
-                    for v in (
-                        (ax.get("xyz") if ax is not None else None) or "0 0 0"
-                    ).split()
-                ]
-            ),
+            xyz=np.array([float(v) for v in ((o.get("xyz") if o is not None else None) or "0 0 0").split()]),
+            rpy=np.array([float(v) for v in ((o.get("rpy") if o is not None else None) or "0 0 0").split()]),
+            axis=np.array([float(v) for v in ((ax.get("xyz") if ax is not None else None) or "0 0 0").split()]),
         )
     if limit is None:
         raise SystemExit(f"{DRIVER} hat im URDF keine obere Gelenkgrenze")
@@ -201,13 +173,7 @@ inline double angle_from_width(double width_m)
 
 def _as_hpp(tab, qmax, error) -> str:
     lines = ",\n".join(f"  {{{{{q:.5f}, {w:.6f}}}}}" for q, w in tab)
-    return HPP_HEAD.format(
-        joint=DRIVER,
-        qmax=f"{qmax:.5f}",
-        n=len(tab),
-        lines=lines,
-        error_mm=f"{error * 1000:.3f}",
-    )
+    return HPP_HEAD.format(joint=DRIVER, qmax=f"{qmax:.5f}", n=len(tab), lines=lines, error_mm=f"{error * 1000:.3f}")
 
 
 def main(urdf: str, fmt: str = "json") -> int:
@@ -225,10 +191,7 @@ def main(urdf: str, fmt: str = "json") -> int:
     tab = [[round(float(q), 5), round(width(q), 6)] for q in qs]
 
     fine = np.linspace(0.0, qmax, 400)
-    error = np.abs(
-        np.array([width(q) for q in fine])
-        - np.interp(fine, [t[0] for t in tab], [t[1] for t in tab])
-    ).max()
+    error = np.abs(np.array([width(q) for q in fine]) - np.interp(fine, [t[0] for t in tab], [t[1] for t in tab])).max()
 
     if fmt == "cpp":
         sys.stdout.write(_as_hpp(tab, qmax, float(error)))
@@ -263,8 +226,7 @@ if __name__ == "__main__":
         "--format",
         choices=("json", "cpp"),
         default="json",
-        help="json = Tabelle fuer die Greiferbruecke (Vorgabe), "
-        "cpp = Header fuer rg6_control_sim",
+        help="json = Tabelle fuer die Greiferbruecke (Vorgabe), " "cpp = Header fuer rg6_control_sim",
     )
     _a = _p.parse_args()
     raise SystemExit(main(_a.urdf, _a.format))

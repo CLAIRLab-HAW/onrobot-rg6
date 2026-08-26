@@ -29,7 +29,7 @@ mock that offers the same surface without hardware.
 ## Tech Stack
 
 ROS 2 Jazzy, `ament_cmake` (C++17), `control_msgs`, `sensor_msgs`,
-`std_msgs`. No `rg6_msgs` at runtime — the state is JSON in a
+`std_msgs`. No interface package of its own — the state is JSON in a
 `std_msgs/String`.
 
 ### The canonical interface
@@ -51,7 +51,8 @@ a caller never branches on which one it is talking to:
 * **`max_effort` is the grip force in N**, clamped to 25…120.
 * `rg6/bridge_state` carries `width_m`, `busy`, `grip_detected`, `status`,
   `safety_failed`, `last_command`. It is JSON in a `std_msgs/String` rather
-  than a typed message so that consumers need nothing from `rg6_msgs`.
+  than a typed message so that a consumer needs no interface package of ours
+  built and sourced — `std_msgs` is enough.
 
 > **Read the state topic before claiming anything about the gripper.** A
 > `GripperCommand` result acknowledges that the goal was *accepted*; the width
@@ -82,7 +83,6 @@ UR tool interface.
 |---|---|---|
 | `rg6_description` | `ament_cmake` | the measured **RG6 v2** model: URDF/Xacro, visual + collision meshes, `config/rg6_v2.yaml`, Clearpath extras glue (`clearpath_extras.urdf.xacro`) |
 | `rg6_control` | `ament_cmake` (C++) | `rg6_control_sim` (container mock), `joint_state_relay`, `joint_state_aggregator`, `joint_states.launch.py`, `scripts/rg6_moveit_patch`, `include/rg6_control/finger_kinematics.hpp` |
-| `rg6_msgs` | interfaces | `msg/GripperState`, `srv/Grip` — **archive types only.** No running node uses them; they are kept because the recordings in `clearpath/data/recordings/` contain `rg6/state` of that type and would otherwise be unplayable. |
 | `tools/` | — | `derive_finger_kinematics.py`: regenerates the gear table from the URDF |
 
 ## Installation
@@ -90,7 +90,7 @@ UR tool interface.
 ```bash
 # from the workspace root (this folder)
 rosdep install --from-paths src --ignore-src -r -y
-colcon build --packages-select rg6_description rg6_msgs rg6_control
+colcon build --packages-select rg6_description rg6_control
 source install/setup.bash
 ```
 
@@ -260,5 +260,5 @@ uv run pytest sdk/plan-bridge/tests/test_offboard_gripper.py    # needs the cont
 [Semantic Versioning](https://semver.org/); see [CHANGELOG.md](CHANGELOG.md).
 ## License
 
-See `src/rg6_description/LICENSE`. `rg6_control`/`rg6_msgs`: BSD-3-Clause.
+See `src/rg6_description/LICENSE`. `rg6_control`: BSD-3-Clause.
 

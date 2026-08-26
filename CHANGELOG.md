@@ -7,6 +7,27 @@ how it embeds into the onboard stack in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
+## 2026-08-26 (rg6_msgs removed)
+
+### Removed
+
+- **`rg6_msgs` is gone** — `msg/GripperState` and `srv/Grip`, the interfaces of the tool-DO driver retired on
+  2026-08-19. Nothing built them and nothing read them: `rg6_control` dropped the dependency the same day, the
+  robot installer builds `--packages-select rg6_description rg6_control`, and the container's
+  `colcon build --packages-up-to rg6_control` therefore never pulled it in. Measured in the running
+  `husky-offboard-mock-robot-1` on 2026-08-26: `/opt/onrobot-rg6/install/` holds `rg6_control` and
+  `rg6_description`, and `ros2 pkg list | grep rg6` names exactly those two. The package had not been shipped for
+  a week.
+- **The reason given on 2026-08-19 for keeping it does not hold.** The claim was that the five recordings in
+  `clearpath/data/recordings/` carrying `/a200_0553/manipulators/rg6/state` would become unplayable. They do carry
+  it (`freedrive`, `greifer`, `lifecycle`, `pstop-recovery`, `stapel-episode`; `fahren` and `record_2026_06_25_3`
+  do not) — but the recordings are self-describing: each MCAP embeds the full `.msg` definition, `std_msgs/Header`
+  included, as the connection's message definition. Measured on 2026-08-26 with no ROS installation present,
+  `rosbags.AnyReader` deserialises the topic correctly (`width=0.16`, `busy=False`). The workspace's own replay
+  path never touches it either — `twinlink`'s `McapSource` reads only `mapping.topics()`, and no mapping names a
+  gripper topic. What would still need a built interface package is ROS-native `ros2 bag play`, and no script,
+  test or skill in the workspace runs it.
+
 ## 2026-08-24 (.gitignore normalised to the workspace base)
 
 - **`.gitignore` now uses the workspace's lean 8-line base** (`__pycache__/`, `*.py[cod]`, `*.egg-info/`, `build/`, `dist/`, `.venv/`, `.pytest_cache/`, `.DS_Store`); replaces the ~280-line auto-generated toptal.com template (Django/Flask/C/C++ patterns this package never produces). Package-specific extras: `docs/`, `install/`, `log/`, `*.pcd`, `COLCON_IGNORE`, `AMENT_IGNORE`.

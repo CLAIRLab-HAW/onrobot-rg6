@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Derives the joint angle -> gripping width table from a GENERATED URDF.
+"""Derives the joint angle ─▶ gripping width table from a GENERATED URDF.
 
-Why from the URDF and not from a formula:  the fingers of the rg6_v2 are a four-bar chain (moment_arm -> truss_arm ->
-finger_tip -> flex_finger), all three tied to the same angle via ``mimic``.  There is no closed formula for it, and an
+Why from the URDF and not from a formula:  the fingers of the rg6_v2 are a four-bar chain (moment_arm ─▶ truss_arm ─▶
+finger_tip ─▶ flex_finger), all three tied to the same angle via ``mimic``.  There is no closed formula for it, and an
 approximation placed alongside would be exactly the second version on which the old model and its driver have already
 drifted apart once (R19).
 

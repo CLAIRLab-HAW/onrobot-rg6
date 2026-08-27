@@ -45,7 +45,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
-                # relative Namen ─▶ im /a200_0553-Namespace aufgeloest.
+                # relative names ─▶ resolved in the /a200_0553 namespace.
                 "source_topics": [
                     "platform/joint_states",  # Raeder
                     "manipulators/joint_states",  # Arm

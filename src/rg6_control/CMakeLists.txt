@@ -59,11 +59,20 @@ install(PROGRAMS scripts/rg6_moveit_patch
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# BUILD_TESTING: nothing stands here.  The RG6 hangs off the OnRobot URCap, not
-# off the tool connector -- there is no characteristic curve and no analogue
-# model left that could be checked here.  What the gripper does in the container
-# is checked by an E2E against the running stack:
-# plan-bridge/tests/test_offboard_gripper.py.
+# BUILD_TESTING: nothing stands here, and that is not the same as untested.
+# What rg6_control_sim DOES is checked by an E2E against the running stack
+# (plan-bridge/tests/test_offboard_gripper.py); the AI2 characteristic curve
+# that a unit test could once have covered went away with the analogue model,
+# when the RG6 moved onto the OnRobot URCap.
+#
+# What is left to check is the generated linkage table in
+# include/rg6_control/finger_kinematics.hpp -- it exists three times over
+# (here, the bridge's JSON on the robot, the robot_contract profile) and is
+# interpolated three times.  That is pinned down by ../../tests/, plain pytest
+# from the workspace root: it compiles this header and compares it against both
+# Python copies, so it needs neither colcon nor a robot and does not belong in
+# a BUILD_TESTING block.
+#
 # Deliberately NO ament_lint_auto: the existing sources have never been linted,
 # and enforcing it after the fact would break the build for everyone.
 

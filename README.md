@@ -239,8 +239,23 @@ Workspace in `system.ros2.workspaces`, `io_and_status_controller` via
 
 ## Running Tests
 
-The gripper has no unit suite of its own — what it does in the container is
-checked end-to-end against a running stack:
+The linkage table exists three times over — the generated C++ header here, the
+bridge's JSON on the robot, the `robot_contract` profile — and each copy carries
+its own interpolation code. `tests/` pins down that all six agree: it compiles
+the generated header and compares it against both Python copies, and it covers
+the generator that produces them. Neither ROS nor a robot is needed; a repo that
+is not checked out makes the cross-repo comparisons skip by name.
+
+```bash
+uv run pytest robot/onrobot-rg6        # from the workspace root
+```
+
+They also come along in the plain root run (`uv run pytest`), which collects
+them by path — this repo is not a `uv` workspace member and deliberately has no
+`pyproject.toml` (see `tests/conftest.py`).
+
+What `rg6_control_sim` *does* is a different question, and one a unit test
+cannot answer; that is checked end-to-end against a running stack:
 
 ```bash
 uv run pytest sdk/plan-bridge/tests/test_offboard_gripper.py    # needs the container

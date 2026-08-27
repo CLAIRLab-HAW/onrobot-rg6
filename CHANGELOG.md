@@ -7,6 +7,41 @@ how it embeds into the onboard stack in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A test suite for the linkage table and its generator** (`tests/`, 77 tests, plain pytest from the workspace
+  root). The table exists three times over — the generated C++ header here, `rg6_finger_kinematics.json` next to the
+  gripper bridge on the robot, and `gripper.linkage.table` in the `robot_contract` profile — and each copy carries
+  its own interpolation code. Only the generator writes the first two; the profile is a HAND copy, exactly like the
+  arm poses were before `test_ssot_parity.py`, and those had already drifted. A drift here would make the container
+  mock compute a different width from the same command than the real robot, which is the one thing the mock exists
+  not to do. The suite compares the data and the results: it compiles the generated header with a probe program and
+  checks it against both Python implementations, and it covers the generator itself against synthetic chains. It
+  needs neither ROS nor a robot, and skips by name where a neighbouring repo is not checked out or no C++ compiler is
+  on PATH.
+
+  The shared helper is `tests/table_sources.py`, named for this repo's subject and not the obvious `siblings`:
+  `deploy/husky-offboard/tests` already carries a helper of that generic name, both conftests put their own directory
+  on `sys.path`, and in the shared root run whichever landed first wins for BOTH trees while the loser dies at import.
+  Test-helper module names are effectively global in this workspace.
+
+  Verified by mutation rather than by passing: eight seeded faults — a drifted digit in either copy, the C++ clamp
+  removed, the inversion searching the wrong way, the upper joint limit not sampled, the two-gripping-face check
+  dropped, a sign flipped in the rotation matrix, the accuracy figure measured against a degenerate grid — were each
+  confirmed to turn the suite red.
+
+### Changed
+
+- **`derive_finger_kinematics.py` is English throughout the interpreter-visible layer** — `_kette` -> `_chain`, the
+  refusal when a URDF does not yield two gripping faces, and the `argparse` help. The German comment in the generated
+  C++ template was pulled along in both the template and the checked-in header, so the two stay identical.
+
+- **The `BUILD_TESTING` note in `rg6_control/CMakeLists.txt` said there was no characteristic curve left to check.**
+  That is true of the AI2 analogue curve, which went away with the tool-connector driver, and not of
+  `finger_kinematics.hpp`, which is one. The note now says where the table is checked instead.
+
 ## 2026-08-26 (rg6_msgs removed)
 
 ### Removed

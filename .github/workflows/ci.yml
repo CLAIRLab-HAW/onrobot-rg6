@@ -1,0 +1,70 @@
+# CI: pytest + ruff (hard errors only).  Two sibling repos are cloned, because the whole point of this suite is that
+# the finger linkage table exists three times over and the copies must agree:
+#
+#   here                     src/rg6_control/include/rg6_control/finger_kinematics.hpp   (generated C++)
+#   husky-custom-setup       scripts/rg6_finger_kinematics.json                          (the bridge on the robot)
+#   robot-contract           the a200_0553 profile, gripper.linkage.table                (a HAND copy)
+#
+# Without those checkouts the cross-repo comparisons would not merely be weaker -- tests/table_sources.py FAILS
+# rather than skips once a workspace root is found, so a mistyped path here turns the run red instead of reporting
+# green having compared nothing.  That is the failure mode this workflow exists to avoid.
+#
+# No docker, no ROS, no robot: the header is compiled with the runner's own g++ into a small probe program and its
+# results are compared against the two Python implementations.  ubuntu-latest ships a compiler, so the
+# skip-if-no-compiler branch in the suite never fires here.
+#
+# `colcon test` is NOT run: rg6_control declares no ament linters on purpose (see its CMakeLists), so it would build
+# a ROS workspace to execute nothing.  What rg6_control_sim DOES is checked by an E2E against a running stack
+# (plan-bridge/tests/test_offboard_gripper.py) and needs images no runner builds.
+#
+# No `black --check`: without `--config` pointing at the workspace root pyproject.toml Black takes its own default of
+# 88 instead of the workspace's line-length 120 and reports the whole tree unformatted (same reason the pre-commit
+# hook passes --config explicitly).
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # The paths mirror the workspace layout (workspace.repos): tests/table_sources.py resolves its siblings
+      # relative to the workspace root, so a checkout anywhere else would not find them.
+      - uses: actions/checkout@v5
+        with:
+          path: robot/onrobot-rg6
+
+      # CLAIRLAB_READ_TOKEN, not GITHUB_TOKEN: the default token is scoped to the repository the workflow runs in,
+      # so against another PRIVATE repo of the same org the API answers "Not Found" rather than 403 -- it does not
+      # confirm the repo exists.  The org secret is the same one robot-contract, perception, plan-bridge,
+      # skill-tree, husky-sdk and husky-offboard use for their private siblings.
+      - uses: actions/checkout@v5
+        with:
+          repository: CLAIRLab-HAW/husky-custom-setup
+          path: robot/husky-custom-setup
+          token: ${{ secrets.CLAIRLAB_READ_TOKEN }}
+
+      - uses: actions/checkout@v5
+        with:
+          repository: CLAIRLab-HAW/robot-contract
+          path: contract/robot-contract
+          token: ${{ secrets.CLAIRLAB_READ_TOKEN }}
+
+      # Root-finder marker: table_sources.py walks up for workspace.repos, exactly as the real workspace is laid out.
+      - run: touch workspace.repos
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # No pyproject.toml here, deliberately (CLAUDE.md: uv would take this repo for the workspace root and run
+      # against the system interpreter), so the dependencies are named rather than resolved.  robot_contract is
+      # installed from its checkout instead of being named: the suite compares against ITS interpolation code, so a
+      # release from PyPI -- if there were one -- would be the wrong thing to measure.
+      - run: pip install numpy pyyaml pytest ruff
+      - run: pip install ./contract/robot-contract
+
+      - run: cd robot/onrobot-rg6 && ruff check --select E9,F63,F7,F82 .
+      - run: cd robot/onrobot-rg6 && python -m pytest tests -q

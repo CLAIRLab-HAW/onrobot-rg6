@@ -30,11 +30,25 @@ def workspace_root() -> Path | None:
 
 
 def sibling(relpath: str) -> Path:
-    """A file in a neighbouring repo, or a skip naming what is missing."""
+    """A file in a neighbouring repo.
+
+    Skips only while there is NO workspace above this repo -- checked out on its own, this repo cannot know where
+    its siblings would be, and that is a legitimate way to use it.
+
+    Once a workspace IS found, a missing file FAILS instead.  The difference matters most in CI, which is the one
+    place where the checkouts are scripted: a mistyped path there would turn every cross-repo comparison into a skip
+    and report green having compared nothing.  Same rule as ``libs/clearlog``'s shell-parity test, and the same
+    reasoning as ``robot-contract``'s ``test_ssot_parity.py`` -- a parity guard that stops guarding without a word is
+    worse than one that is absent.
+    """
     root = workspace_root()
     if root is None:
         pytest.skip("not inside the clearpath workspace (no workspace.repos above this file)")
     path = root / relpath
     if not path.is_file():
-        pytest.skip(f"{relpath} is not checked out")
+        pytest.fail(
+            f"{relpath} is missing, but the workspace root {root} is right there. "
+            "The linkage table cannot be compared against a copy that is not checked out -- "
+            "run `vcs import < workspace.repos`, or fix the path if the file moved."
+        )
     return path

@@ -22,6 +22,20 @@ the versioning [Semantic Versioning](https://semver.org/).
   needs neither ROS nor a robot, and skips by name where a neighbouring repo is not checked out or no C++ compiler is
   on PATH.
 
+- **A GitHub workflow** (`.github/workflows/ci.yml`) that clones `husky-custom-setup` and `robot-contract` into the
+  workspace layout so the cross-repo comparisons actually run, compiles the generated header with the runner's own
+  compiler and runs the suite. No docker, no ROS, no robot. `colcon test` is not run: `rg6_control` declares no ament
+  linters on purpose, so it would build a ROS workspace to execute nothing.
+
+### Changed
+
+- **A missing sibling repo now FAILS the suite instead of skipping it, once a workspace root is found.** Skipping is
+  right for this repo cloned on its own — it cannot know where its siblings would be — but wrong in CI, which is the
+  one place the checkouts are scripted: a mistyped path there would turn every cross-repo comparison into a skip and
+  report green having compared nothing. Verified by removing the checkout in a CI-shaped copy: 2 failed, 26 errors,
+  naming the missing path; without the `workspace.repos` marker the same tree is 48 passed, 29 skipped. Same rule as
+  `libs/clearlog`'s shell-parity test.
+
   The shared helper is `tests/table_sources.py`, named for this repo's subject and not the obvious `siblings`:
   `deploy/husky-offboard/tests` already carries a helper of that generic name, both conftests put their own directory
   on `sys.path`, and in the shared root run whichever landed first wins for BOTH trees while the loser dies at import.
@@ -31,8 +45,6 @@ the versioning [Semantic Versioning](https://semver.org/).
   removed, the inversion searching the wrong way, the upper joint limit not sampled, the two-gripping-face check
   dropped, a sign flipped in the rotation matrix, the accuracy figure measured against a degenerate grid — were each
   confirmed to turn the suite red.
-
-### Changed
 
 - **`derive_finger_kinematics.py` is English throughout the interpreter-visible layer** — `_kette` -> `_chain`, the
   refusal when a URDF does not yield two gripping faces, and the `argparse` help. The German comment in the generated

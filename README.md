@@ -243,8 +243,12 @@ The linkage table exists three times over — the generated C++ header here, the
 bridge's JSON on the robot, the `robot_contract` profile — and each copy carries
 its own interpolation code. `tests/` pins down that all six agree: it compiles
 the generated header and compares it against both Python copies, and it covers
-the generator that produces them. Neither ROS nor a robot is needed; a repo that
-is not checked out makes the cross-repo comparisons skip by name.
+the generator that produces them. Neither ROS nor a robot is needed.
+
+Cloned on its own, without the workspace around it, the cross-repo comparisons
+skip — this repo cannot know where its siblings would be. Inside a workspace
+they *fail* when a sibling is missing, rather than skipping: that is the case CI
+scripts, and a guard that stops guarding without a word is worse than none.
 
 ```bash
 uv run pytest robot/onrobot-rg6        # from the workspace root

@@ -77,9 +77,9 @@ inline double width_from_angle(double q)
   return kMinWidthM;
 }
 
-//: Fingergelenk [rad] fuer die lichte Weite ``width_m``.  Die Weite wird auf
-//: den darstellbaren Bereich GEKLEMMT -- ein Befehl ueber den Hub hinaus ist
-//: gueltig und bedeutet "so weit wie es geht", nicht NaN.
+//: Finger joint [rad] for the clear width ``width_m``.  The width is CLAMPED to
+//: the representable range -- a command past the stroke is valid and means "as
+//: far as it goes", not NaN.
 inline double angle_from_width(double width_m)
 {
   const double w = std::clamp(width_m, kMinWidthM, kMaxWidthM);

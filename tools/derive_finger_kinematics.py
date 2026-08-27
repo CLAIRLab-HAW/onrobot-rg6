@@ -47,7 +47,7 @@ def _rpy_to_R(r, p, y):
     )
 
 
-def _kette(urdf):
+def _chain(urdf):
     root = ET.parse(urdf).getroot()
     K, limit = {}, None
     for j in root.findall("joint"):
@@ -74,11 +74,11 @@ def _kette(urdf):
 
 
 def _pose(K, goal, q):
-    T, kette, link = np.eye(4), [], goal
+    T, chain, link = np.eye(4), [], goal
     while link in K:
-        kette.append(K[link])
+        chain.append(K[link])
         link = K[link]["parent"]
-    for j in reversed(kette):
+    for j in reversed(chain):
         A = np.eye(4)
         A[:3, :3] = _rpy_to_R(*j["rpy"])
         A[:3, 3] = j["xyz"]
@@ -147,9 +147,9 @@ inline double width_from_angle(double q)
   return kMinWidthM;
 }}
 
-//: Fingergelenk [rad] fuer die lichte Weite ``width_m``.  Die Weite wird auf
-//: den darstellbaren Bereich GEKLEMMT -- ein Befehl ueber den Hub hinaus ist
-//: gueltig und bedeutet "so weit wie es geht", nicht NaN.
+//: Finger joint [rad] for the clear width ``width_m``.  The width is CLAMPED to
+//: the representable range -- a command past the stroke is valid and means "as
+//: far as it goes", not NaN.
 inline double angle_from_width(double width_m)
 {{
   const double w = std::clamp(width_m, kMinWidthM, kMaxWidthM);
@@ -183,10 +183,10 @@ def _as_hpp(tab, qmin, qmax, error) -> str:
 
 
 def main(urdf: str, fmt: str = "json") -> int:
-    K, (qmin, qmax) = _kette(urdf)
+    K, (qmin, qmax) = _chain(urdf)
     faces = sorted(n for n in K if n.endswith("flex_finger"))
     if len(faces) != 2:
-        raise SystemExit(f"erwarte zwei flex_finger-Greifflaechen, gefunden: {faces}")
+        raise SystemExit(f"expected two flex_finger gripping faces, found: {faces}")
 
     def width(q: float) -> float:
         a = _pose(K, faces[0], q)[:3, 3]
@@ -229,12 +229,12 @@ def main(urdf: str, fmt: str = "json") -> int:
 
 if __name__ == "__main__":
     _p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    _p.add_argument("urdf", help="generiertes URDF mit dem Greifermodell")
+    _p.add_argument("urdf", help="generated URDF carrying the gripper model")
     _p.add_argument(
         "--format",
         choices=("json", "cpp"),
         default="json",
-        help="json = Tabelle fuer die Greiferbruecke (Vorgabe), " "cpp = Header fuer rg6_control_sim",
+        help="json = table for the gripper bridge (default), cpp = header for rg6_control_sim",
     )
     _a = _p.parse_args()
     raise SystemExit(main(_a.urdf, _a.format))

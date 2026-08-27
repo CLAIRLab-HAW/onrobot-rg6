@@ -53,7 +53,11 @@ def _kette(urdf):
     for j in root.findall("joint"):
         par, ch, o = j.find("parent"), j.find("child"), j.find("origin")
         if j.get("name") == DRIVER and j.find("limit") is not None:
-            limit = float(j.find("limit").get("upper"))
+            # Both ends, not just the upper one.  ``lower`` is not always 0: the mechanical open stop of the RG6 does
+            # not reach the geometric zero of the chain (measured 2026-08-27, see rg6_v2.yaml), and a table that
+            # starts at 0 anyway would hand out an opening the hardware cannot deliver -- while the URDF, which does
+            # read ``lower``, refuses it.  Two truths about the same joint.
+            limit = (float(j.find("limit").get("lower")), float(j.find("limit").get("upper")))
         if par is None or ch is None:
             continue
         ax = j.find("axis")
@@ -65,7 +69,7 @@ def _kette(urdf):
             axis=np.array([float(v) for v in ((ax.get("xyz") if ax is not None else None) or "0 0 0").split()]),
         )
     if limit is None:
-        raise SystemExit(f"{DRIVER} hat im URDF keine obere Gelenkgrenze")
+        raise SystemExit(f"{DRIVER} has no joint limit in the URDF")
     return K, limit
 
 
@@ -89,23 +93,23 @@ def _pose(K, goal, q):
 
 
 HPP_HEAD = """\
-// ERZEUGT, NICHT GEPFLEGT -- tools/derive_finger_kinematics.py aus dem
-// generierten URDF des Greifermodells.  Nach jeder Aenderung am Modell neu
-// erzeugen; von Hand editierte Zahlen laufen still gegen den Roboter weg.
+// GENERATED, NOT MAINTAINED -- tools/derive_finger_kinematics.py from the
+// generated URDF of the gripper model.  Regenerate after every change to the
+// model; numbers edited by hand drift away from the robot in silence.
 //
-// Gelenkwinkel {joint} [rad] -> lichte Weite zwischen den Padflaechen
-// [m], gemessen zwischen den beiden flex_finger-Meshes.  Dieselbe Tabelle
-// liegt als JSON neben der Greiferbruecke auf dem Roboter
-// (husky-custom-setup/scripts/rg6_finger_kinematics.json) und im Roboterprofil
-// (robot_contract, gripper.linkage.table).
+// Joint angle {joint} [rad] -> clear width between the pad faces [m], measured
+// between the two flex_finger meshes.  The same table lies as JSON next to the
+// gripper bridge on the robot
+// (husky-custom-setup/scripts/rg6_finger_kinematics.json) and in the robot
+// profile (robot_contract, gripper.linkage.table).
 //
-// Es gibt keine geschlossene Formel:  die Finger sind eine Viergelenkkette.
-// Die Vorgaengerfassung (rg6_control::linkage, Kurbelschwinge) gehoerte zum
-// ALTEN Greifermodell und lag mit dem rg6_v2 um mehr als 60 mm daneben.
+// There is no closed formula: the fingers are a four-bar chain.
 //
-// Obergrenze {qmax} rad = Nulldurchgang der Weite; darueber fahren die
-// Finger im Modell durcheinander hindurch.
-// Max. Interpolationsfehler gegen ein 400-Punkte-Gitter: {fehler_mm} mm.
+// Lower bound {qmin} rad = the mechanical open stop; the chain computes a wider
+// opening below it that the hardware does not reach.
+// Upper bound {qmax} rad = the zero crossing of the width; beyond it the
+// fingers drive through one another in the model.
+// Max. interpolation error against a 400-point grid: {error_mm} mm.
 
 #ifndef RG6_CONTROL__FINGER_KINEMATICS_HPP_
 #define RG6_CONTROL__FINGER_KINEMATICS_HPP_
@@ -117,18 +121,18 @@ HPP_HEAD = """\
 namespace rg6_control::finger_kinematics
 {{
 
-inline constexpr double kQMinRad = 0.0;
+inline constexpr double kQMinRad = {qmin};
 inline constexpr double kQMaxRad = {qmax};
 
-//: Stuetzstellen (q [rad], Weite [m]), streng monoton fallend in der Weite.
+//: Sampling points (q [rad], width [m]), strictly monotonically falling in the width.
 inline constexpr std::array<std::array<double, 2>, {n}> kTable = {{{{
-{zeilen}
+{lines}
 }}}};
 
 inline constexpr double kMaxWidthM = kTable.front()[1];
 inline constexpr double kMinWidthM = kTable.back()[1];
 
-//: Lichte Weite [m] beim Fingergelenk ``q`` [rad], linear interpoliert.
+//: Clear width [m] at finger joint ``q`` [rad], linearly interpolated.
 inline double width_from_angle(double q)
 {{
   const double x = std::clamp(q, kQMinRad, kQMaxRad);
@@ -166,13 +170,20 @@ inline double angle_from_width(double width_m)
 """
 
 
-def _as_hpp(tab, qmax, error) -> str:
+def _as_hpp(tab, qmin, qmax, error) -> str:
     lines = ",\n".join(f"  {{{{{q:.5f}, {w:.6f}}}}}" for q, w in tab)
-    return HPP_HEAD.format(joint=DRIVER, qmax=f"{qmax:.5f}", n=len(tab), lines=lines, error_mm=f"{error * 1000:.3f}")
+    return HPP_HEAD.format(
+        joint=DRIVER,
+        qmin=f"{qmin:.5f}",
+        qmax=f"{qmax:.5f}",
+        n=len(tab),
+        lines=lines,
+        error_mm=f"{error * 1000:.3f}",
+    )
 
 
 def main(urdf: str, fmt: str = "json") -> int:
-    K, qmax = _kette(urdf)
+    K, (qmin, qmax) = _kette(urdf)
     faces = sorted(n for n in K if n.endswith("flex_finger"))
     if len(faces) != 2:
         raise SystemExit(f"erwarte zwei flex_finger-Greifflaechen, gefunden: {faces}")
@@ -182,28 +193,30 @@ def main(urdf: str, fmt: str = "json") -> int:
         b = _pose(K, faces[1], q)[:3, 3]
         return float(np.linalg.norm(a - b))
 
-    qs = list(np.arange(0.0, qmax, STEP_RAD)) + [qmax]
+    qs = list(np.arange(qmin, qmax, STEP_RAD)) + [qmax]
     tab = [[round(float(q), 5), round(width(q), 6)] for q in qs]
 
-    fine = np.linspace(0.0, qmax, 400)
+    fine = np.linspace(qmin, qmax, 400)
     error = np.abs(np.array([width(q) for q in fine]) - np.interp(fine, [t[0] for t in tab], [t[1] for t in tab])).max()
 
     if fmt == "cpp":
-        sys.stdout.write(_as_hpp(tab, qmax, float(error)))
+        sys.stdout.write(_as_hpp(tab, qmin, qmax, float(error)))
         return 0
 
     json.dump(
         {
             "kommentar": [
-                "Gelenkwinkel rg6_finger_joint [rad] -> lichte Weite zwischen den",
-                "Padflaechen [m], gemessen zwischen den beiden flex_finger-Meshes.",
-                "ERZEUGT, nicht gepflegt: tools/derive_finger_kinematics.py aus dem",
-                "generierten URDF.  Nach jeder Aenderung am Greifermodell neu erzeugen.",
-                "Die Obergrenze ist der Nulldurchgang der Weite; darueber fahren die",
-                "Finger im Modell durcheinander hindurch und die Weite waechst wieder.",
+                "Joint angle rg6_finger_joint [rad] -> clear width between the pad",
+                "faces [m], measured between the two flex_finger meshes.",
+                "GENERATED, not maintained: tools/derive_finger_kinematics.py from the",
+                "generated URDF.  Regenerate after every change to the gripper model.",
+                "The lower bound is the mechanical open stop; below it the chain",
+                "computes a wider opening than the hardware reaches.",
+                "The upper bound is the zero crossing of the width; beyond it the",
+                "fingers drive through one another in the model and the width grows again.",
             ],
             "joint": DRIVER,
-            "joint_limits_rad": [0.0, round(qmax, 5)],
+            "joint_limits_rad": [round(qmin, 5), round(qmax, 5)],
             "max_interpolationsfehler_m": round(float(error), 6),
             "table_q_rad_width_m": tab,
         },

@@ -1,20 +1,20 @@
-// ERZEUGT, NICHT GEPFLEGT -- tools/derive_finger_kinematics.py aus dem
-// generierten URDF des Greifermodells.  Nach jeder Aenderung am Modell neu
-// erzeugen; von Hand editierte Zahlen laufen still gegen den Roboter weg.
+// GENERATED, NOT MAINTAINED -- tools/derive_finger_kinematics.py from the
+// generated URDF of the gripper model.  Regenerate after every change to the
+// model; numbers edited by hand drift away from the robot in silence.
 //
-// Gelenkwinkel rg6_finger_joint [rad] -> lichte Weite zwischen den Padflaechen
-// [m], gemessen zwischen den beiden flex_finger-Meshes.  Dieselbe Tabelle
-// liegt als JSON neben der Greiferbruecke auf dem Roboter
-// (husky-custom-setup/scripts/rg6_finger_kinematics.json) und im Roboterprofil
-// (robot_contract, gripper.linkage.table).
+// Joint angle rg6_finger_joint [rad] -> clear width between the pad faces [m], measured
+// between the two flex_finger meshes.  The same table lies as JSON next to the
+// gripper bridge on the robot
+// (husky-custom-setup/scripts/rg6_finger_kinematics.json) and in the robot
+// profile (robot_contract, gripper.linkage.table).
 //
-// Es gibt keine geschlossene Formel:  die Finger sind eine Viergelenkkette.
-// Die Vorgaengerfassung (rg6_control::linkage, Kurbelschwinge) gehoerte zum
-// ALTEN Greifermodell und lag mit dem rg6_v2 um mehr als 60 mm daneben.
+// There is no closed formula: the fingers are a four-bar chain.
 //
-// Obergrenze 1.25478 rad = Nulldurchgang der Weite; darueber fahren die
-// Finger im Modell durcheinander hindurch.
-// Max. Interpolationsfehler gegen ein 400-Punkte-Gitter: 0.047 mm.
+// Lower bound 0.03800 rad = the mechanical open stop; the chain computes a wider
+// opening below it that the hardware does not reach.
+// Upper bound 1.25478 rad = the zero crossing of the width; beyond it the
+// fingers drive through one another in the model.
+// Max. interpolation error against a 400-point grid: 0.046 mm.
 
 #ifndef RG6_CONTROL__FINGER_KINEMATICS_HPP_
 #define RG6_CONTROL__FINGER_KINEMATICS_HPP_
@@ -26,44 +26,43 @@
 namespace rg6_control::finger_kinematics
 {
 
-inline constexpr double kQMinRad = 0.0;
+inline constexpr double kQMinRad = 0.03800;
 inline constexpr double kQMaxRad = 1.25478;
 
-//: Stuetzstellen (q [rad], Weite [m]), streng monoton fallend in der Weite.
-inline constexpr std::array<std::array<double, 2>, 27> kTable = {{
-  {{0.00000, 0.153168}},
-  {{0.05000, 0.150446}},
-  {{0.10000, 0.147351}},
-  {{0.15000, 0.143891}},
-  {{0.20000, 0.140075}},
-  {{0.25000, 0.135912}},
-  {{0.30000, 0.131413}},
-  {{0.35000, 0.126590}},
-  {{0.40000, 0.121453}},
-  {{0.45000, 0.116016}},
-  {{0.50000, 0.110293}},
-  {{0.55000, 0.104298}},
-  {{0.60000, 0.098045}},
-  {{0.65000, 0.091551}},
-  {{0.70000, 0.084832}},
-  {{0.75000, 0.077904}},
-  {{0.80000, 0.070784}},
-  {{0.85000, 0.063492}},
-  {{0.90000, 0.056044}},
-  {{0.95000, 0.048459}},
-  {{1.00000, 0.040757}},
-  {{1.05000, 0.032957}},
-  {{1.10000, 0.025078}},
-  {{1.15000, 0.017139}},
-  {{1.20000, 0.009161}},
-  {{1.25000, 0.001164}},
+//: Sampling points (q [rad], width [m]), strictly monotonically falling in the width.
+inline constexpr std::array<std::array<double, 2>, 26> kTable = {{
+  {{0.03800, 0.151133}},
+  {{0.08800, 0.148127}},
+  {{0.13800, 0.144754}},
+  {{0.18800, 0.141023}},
+  {{0.23800, 0.136942}},
+  {{0.28800, 0.132523}},
+  {{0.33800, 0.127776}},
+  {{0.38800, 0.122714}},
+  {{0.43800, 0.117348}},
+  {{0.48800, 0.111692}},
+  {{0.53800, 0.105761}},
+  {{0.58800, 0.099568}},
+  {{0.63800, 0.093131}},
+  {{0.68800, 0.086464}},
+  {{0.73800, 0.079584}},
+  {{0.78800, 0.072509}},
+  {{0.83800, 0.065257}},
+  {{0.88800, 0.057844}},
+  {{0.93800, 0.050291}},
+  {{0.98800, 0.042616}},
+  {{1.03800, 0.034837}},
+  {{1.08800, 0.026975}},
+  {{1.13800, 0.019049}},
+  {{1.18800, 0.011079}},
+  {{1.23800, 0.003084}},
   {{1.25478, 0.000399}}
 }};
 
 inline constexpr double kMaxWidthM = kTable.front()[1];
 inline constexpr double kMinWidthM = kTable.back()[1];
 
-//: Lichte Weite [m] beim Fingergelenk ``q`` [rad], linear interpoliert.
+//: Clear width [m] at finger joint ``q`` [rad], linearly interpolated.
 inline double width_from_angle(double q)
 {
   const double x = std::clamp(q, kQMinRad, kQMaxRad);

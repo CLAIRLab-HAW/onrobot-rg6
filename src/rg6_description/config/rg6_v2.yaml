@@ -1,5 +1,15 @@
 limit:
-  lower: 0.0
+  # The mechanical open stop does NOT reach the geometric q = 0.  Measured on 2026-08-27 at the a200-0553 with a
+  # caliper, pad face to pad face: at the stop the hand is 151,10 mm wide, while the four-bar chain computes
+  # 153,17 mm there -- 2,07 mm that the model would hand out as usable opening.  It is not a modelling error of the
+  # chain: at q = 0,20 / 0,41336 / 0,73487 / 1,00485 the model was right to within 0,30 mm (140,25 against 140,08;
+  # 119,70 against 120,00; 79,95 against 80,00; 40,15 against 40,00), so it carries to right next to the stop and
+  # only the stop itself falls out.  Nor is it the direction dependence: approaching the same q by opening reads
+  # 1,00 mm WIDER than by closing (141,25 against 140,25 at q = 0,20), and the stop can only be reached by opening
+  # -- the effect works against the deviation, not for it.
+  #
+  # Same class of clamp as `upper` below, and for the same reason: the geometry runs past what the hardware does.
+  lower: 0.038
   # Upstream: 1.3.  Clamped here, because at that point the fingers have
   # ALREADY passed THROUGH each other: the clear width falls to 0 at
   # q = 1,25478 and rises again beyond it (at 1,3 the model shows 6,8 mm, with

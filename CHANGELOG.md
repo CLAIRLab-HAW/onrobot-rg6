@@ -51,6 +51,27 @@ the versioning [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- **The open end of the finger table is the mechanical stop, not the geometric zero of the chain.**
+  `rg6_v2.yaml` clamps `limit.lower` from `0.0` to `0.038` rad, the same class of clamp `limit.upper` already
+  carries. Measured on 2026-08-27 at the a200-0553 with a caliper, pad face to pad face: 151,10 mm at the stop,
+  while the four-bar chain computes 153,17 mm at q = 0 -- 2,07 mm of opening the model handed out and the hardware
+  never delivered. It is not an error of the chain: in the same series the model was right to within 0,30 mm at
+  q = 0,20 / 0,41336 / 0,73487 / 1,00485 (140,25 against 140,08 mm; 119,70 against 120,00; 79,95 against 80,00;
+  40,15 against 40,00), so it carries to right next to the stop and only the stop falls out. Nor is it the
+  direction dependence, which was measured at 1,00 mm at q = 0,20 and points the other way (opening reads WIDER,
+  and the stop can only be reached by opening). The regenerated table now starts at 151,13 mm, 0,03 mm off the
+  measurement.
+
+- **`derive_finger_kinematics.py` ignored `limit.lower` and sampled from 0 regardless.** It read only `upper` and
+  started every table at zero, so a clamped URDF and its table would have described the same joint differently --
+  the URDF refusing an angle the table still offered a width for. It now reads both ends and samples over
+  `[lower, upper]`; `joint_limits_rad` carries the real lower bound.
+
+- **`--format cpp` could not run at all.** `HPP_HEAD` still used the German placeholders `{fehler_mm}` and
+  `{zeilen}` while the call passed `error_mm` and `lines`, so every invocation died with `KeyError` -- a leftover
+  of the German-to-English pass. The C++ header for `rg6_control_sim` was therefore unregenerable; it is fixed and
+  the header is regenerated, including a `kQMinRad` that is no longer hard-coded to 0.
+
 ### Hinzugefügt
 - **`husky_top_assembly` hat Kollisionsgeometrie (ROBOTER-TODO R15).** Der
   Sensorbügel war im Viewer sichtbar und für `move_group` nicht vorhanden:

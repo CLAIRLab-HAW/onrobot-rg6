@@ -212,13 +212,22 @@
           </geometry>
           <material name="onrobot/light_grey"/>
         </visual>
-        <!-- EINE Kollision, nicht zwei.  Upstream fuehrt diesen Block doppelt;
-             im kompilierten MuJoCo-Modell erschien der finger_tip dadurch mit
-             zwei identischen Kollisionsmeshes (2026-08-19 gemessen).  Das
-             kostet Kollisionspruefungen und bringt nichts. -->
+        <!-- ZWEI Kollisionen, und zwar die dafuer gelieferten: die Spitze ist als konvexe
+             Zerlegung modelliert (finger_tip_1 und finger_tip_2), waehrend jedes andere Glied
+             hier ohnehin sein collision/-Mesh benutzt.  Upstream zeigt an dieser einen Stelle
+             auf das SICHTNETZ, und das ist die Greifflaeche: 2154 Dreiecke, konkav, und jede
+             Engine, die konvexifiziert, blaeht sie auf das 2,04-fache ihres Volumens auf
+             (2026-08-28 gemessen).  Die beiden Kollisionsteile sind bereits konvex
+             (Huelle/Netz = 1,00) und zusammen 236 + 176 Dreiecke.  Upstream fuehrte den Block
+             doppelt, aber mit demselben Sichtnetz -- daher die Zerlegung statt einer Kopie. -->
         <collision>
           <geometry>
-            <mesh filename="package://rg6_description/meshes/${model}/visual/finger_tip.stl"/>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/finger_tip_1.stl"/>
+          </geometry>
+        </collision>
+        <collision>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/finger_tip_2.stl"/>
           </geometry>
         </collision>
         <xacro:_inertial id="finger_tip"/>

@@ -7,6 +7,16 @@ how it embeds into the onboard stack in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
+## 2026-08-29 (the prose and the output of this repo are English)
+
+- **`rg6_moveit_patch` logs, help texts and SRDF marker are English.** The marker line inserted into
+  `robot.srdf` reads `<!-- onrobot-rg6:BEGIN (rg6_moveit_patch; do not edit by hand) -->`. Only the marker's
+  own text changed, not where it goes or how it is matched, and the SRDF is regenerated on every boot before the
+  patch runs, so nothing carries an old marker across.
+- **The comments in the three C++ nodes and in the two xacro files are English**, transliterated umlauts and
+  all, and `LICENSE-THIRD-PARTY.md` is an English document — its subject is a third-party licence, which is
+  read outside this workspace.
+
 ## [Unreleased]
 
 ### Added

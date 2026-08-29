@@ -8,22 +8,22 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 
-// Aggregiert mehrere PARTIELLE joint_states-Quellen (Raeder / Arm / Greifer) zu
-// EINEM vollstaendigen Snapshot-Topic.
+// Aggregates several PARTIAL joint_states sources (wheels / arm / gripper) into
+// ONE complete snapshot topic.
 //
-// Warum noetig: Der a200_0553 laeuft mit ZWEI controller_managern (Platform +
-// manipulators) plus einem synthetischen Greifer-Node -> drei getrennte, jeweils
-// partielle joint_states. ros2_control aggregiert nur INNERHALB eines CM
-// automatisch; ueber CM-Grenzen hinweg gibt es keinen gemeinsamen Broadcaster.
+// Why it is needed: the a200_0553 runs with TWO controller_managers (platform +
+// manipulators) plus a synthetic gripper node -> three separate, each partial
+// joint_states. ros2_control aggregates automatically only WITHIN one CM; across
+// CM boundaries there is no shared broadcaster.
 //
-// Dieser Node haelt je Gelenk den zuletzt gesehenen (position, velocity, effort)
-// und published getaktet die VEREINIGUNG aller je gesehenen Gelenke. Er erhaelt
-// velocity UND effort (anders als joint_state_publisher, der nur Position kann).
+// This node keeps the last seen (position, velocity, effort) per joint and
+// publishes the UNION of all joints ever seen on a fixed cycle. It preserves
+// velocity AND effort (unlike joint_state_publisher, which can only do position).
 //
-// GEDACHT ALS BEOBACHTUNGS-/RECORDING-TOPIC (rosbag/Foxglove), NICHT als Live-
-// TF-Feed fuer den robot_state_publisher: ein Aggregator im TF-Pfad waere ein
-// Single-Point-of-Failure, waehrend der gecachte platform/joint_states-Bus bei
-// Ausfall einer Quelle graceful degradiert (nur deren Gelenke veralten).
+// MEANT AS AN OBSERVATION/RECORDING TOPIC (rosbag/Foxglove), NOT as a live TF
+// feed for the robot_state_publisher: an aggregator in the TF path would be a
+// single point of failure, whereas the cached platform/joint_states bus degrades
+// gracefully when one source drops out (only that source's joints go stale).
 
 using namespace std::chrono_literals;
 
@@ -32,7 +32,7 @@ class JointStateAggregator : public rclcpp::Node
 public:
   JointStateAggregator() : Node("joint_state_aggregator")
   {
-    // Relative Namen -> im Node-Namespace (/a200_0553) aufloesbar.
+    // Relative names -> resolvable in the node namespace (/a200_0553).
     const std::vector<std::string> default_sources = {
       "platform/joint_states",
       "manipulators/joint_states",
@@ -49,7 +49,7 @@ public:
       subs_.push_back(this->create_subscription<sensor_msgs::msg::JointState>(
         topic, rclcpp::QoS(10),
         [this](const sensor_msgs::msg::JointState::SharedPtr msg) { this->on_source(*msg); }));
-      RCLCPP_INFO(this->get_logger(), "aggregiere Quelle: %s", topic.c_str());
+      RCLCPP_INFO(this->get_logger(), "aggregating source: %s", topic.c_str());
     }
 
     const auto period = std::chrono::duration<double>(1.0 / std::max(1.0, rate));
@@ -70,8 +70,8 @@ private:
 
   void on_source(const sensor_msgs::msg::JointState & msg)
   {
-    // velocity/effort sind optional: nur uebernehmen, wenn die Arrays zur
-    // Namensliste passen (der Greifer-Node z.B. liefert nur Position).
+    // velocity/effort are optional: take them over only when the arrays match
+    // the name list (the gripper node, say, delivers position only).
     const bool has_vel = msg.velocity.size() == msg.name.size();
     const bool has_eff = msg.effort.size() == msg.name.size();
     for (std::size_t i = 0; i < msg.name.size(); ++i) {
@@ -93,11 +93,11 @@ private:
   void publish()
   {
     if (joints_.empty()) {
-      return;  // noch keine Quelle gesehen -> nichts (Phantom-Nullen vermeiden)
+      return;  // no source seen yet -> nothing (avoid phantom zeroes)
     }
 
-    // velocity/effort-Arrays nur ausgeben, wenn ueberhaupt eine Quelle sie liefert;
-    // JointState verlangt Arrays gleicher Laenge wie name (oder leer).
+    // Emit the velocity/effort arrays only when some source delivers them at all;
+    // JointState demands arrays of the same length as name (or empty).
     bool any_vel = false;
     bool any_eff = false;
     for (const auto & [name, j] : joints_) {
@@ -122,7 +122,7 @@ private:
       out.name.push_back(name);
       out.position.push_back(j.pos);
       if (any_vel) {
-        out.velocity.push_back(j.vel);  // 0.0 fuer Quellen ohne velocity (z.B. Greifer)
+        out.velocity.push_back(j.vel);  // 0.0 for sources without velocity (the gripper, say)
       }
       if (any_eff) {
         out.effort.push_back(j.eff);

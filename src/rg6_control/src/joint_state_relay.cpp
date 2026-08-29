@@ -6,24 +6,25 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 
-// Leitet partielle joint_states von mehreren Quell-Topics VERBATIM auf EIN
-// Ziel-Topic weiter, mit EXPLIZIT RELIABLE Publisher-QoS.
+// Forwards partial joint_states from several source topics VERBATIM onto ONE
+// target topic, with an EXPLICITLY RELIABLE publisher QoS.
 //
-// Warum eigener Node statt `topic_tools relay`:
-// topic_tools relay publiziert je nach Version mit best-effort/SensorDataQoS.
-// move_group abonniert platform/joint_states aber RELIABLE -> ein best-effort-
-// Publisher wird dort NICHT empfangen. Der robot_state_publisher abonniert
-// best-effort und bekommt die Daten sehr wohl -> TF/Anzeige ok, ABER MoveIt
-// bekommt den Arm-Zustand nicht -> Planning schlaegt fehl (klassisches Symptom
-// "Zustand korrekt angezeigt, Planning failt"). Ein RELIABLE-Publisher bedient
-// BEIDE: reliable move_group UND best-effort robot_state_publisher.
+// Why a node of our own instead of `topic_tools relay`:
+// depending on its version, topic_tools relay publishes with
+// best-effort/SensorDataQoS. move_group, however, subscribes to
+// platform/joint_states as RELIABLE -> a best-effort publisher is NOT received
+// there. The robot_state_publisher subscribes best-effort and does get the data
+// -> TF/display fine, BUT MoveIt does not get the arm state -> planning fails
+// (the classic symptom "state displayed correctly, planning fails"). One
+// RELIABLE publisher serves BOTH: the reliable move_group and the best-effort
+// robot_state_publisher.
 
 class JointStateRelay : public rclcpp::Node
 {
 public:
   JointStateRelay() : Node("joint_state_relay")
   {
-    // Relative Namen -> im Node-Namespace (/a200_0553) aufloesbar.
+    // Relative names -> resolvable in the node namespace (/a200_0553).
     const std::vector<std::string> default_inputs = {
       "manipulators/joint_states",
       "manipulators/endeffectors/joint_states",
@@ -32,8 +33,8 @@ public:
     const auto output = this->declare_parameter<std::string>("output_topic", "platform/joint_states");
     const int depth = this->declare_parameter<int>("depth", 20);
 
-    // RELIABLE + VOLATILE + KEEP_LAST: kompatibel mit dem reliable move_group-
-    // Subscriber UND dem best-effort robot_state_publisher-Subscriber.
+    // RELIABLE + VOLATILE + KEEP_LAST: compatible with the reliable move_group
+    // subscriber AND the best-effort robot_state_publisher subscriber.
     rclcpp::QoS qos(rclcpp::KeepLast(static_cast<std::size_t>(std::max(1, depth))));
     qos.reliable().durability_volatile();
 

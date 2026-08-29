@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 
-<!-- Meshpfade: package:// statt des Upstream-"file://$(find ...)".
-     Zwei Gruende, beide gemessen am 2026-08-19:
-     1. Die foxglove_bridge liefert nur aus, was ihre asset_uri_allowlist
-        erlaubt, und die lautet "^package://...".  Mit file:// zeigt Foxglove
-        das Modell OHNE Meshes; genau das war das Symptom am Roboter.
-     2. file://$(find ...) nagelt den absoluten Pfad des BAUENDEN Rechners
-        ins Modell (/home/robot/onrobot-rg6/install/...).  Weder Workstation
-        noch Container noch eine Wiedergabe koennen ihn aufloesen. -->
+<!-- Mesh paths: package:// instead of upstream's "file://$(find ...)".
+     Two reasons, both measured on 2026-08-19:
+     1. The foxglove_bridge only serves what its asset_uri_allowlist permits, and
+        that one reads "^package://...".  With file:// Foxglove shows the model
+        WITHOUT meshes; that was exactly the symptom on the robot.
+     2. file://$(find ...) nails the absolute path of the BUILDING machine into
+        the model (/home/robot/onrobot-rg6/install/...).  Neither the
+        workstation nor a container nor a replay can resolve it. -->
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="onrobot_rg_macro">
 
   <!-- materials -->
@@ -21,11 +21,11 @@
     model:='rg2_v1' safety_shield:=False bracket:='single_bracket' mount_angle:=0.0 standalone:=false real_hardware:=false
     driver_joint:=''">
     <xacro:property name="gripper_name" value="${prefix}gripper"/>
-    <!-- Name des Treibergelenks.  Upstream heisst es "<prefix>gripper_joint";
-         dieser Workspace kennt seit jeher "rg6_finger_joint", und der Name
-         steht in /joint_states, im Profil, im SRDF-Patch, in der
-         Greiferbruecke und in den MuJoCo-Szenen.  Ein Parameter hier spart
-         eine Umbenennung auf dem Draht.  Leer = Upstream-Voreinstellung. -->
+    <!-- Name of the driver joint.  Upstream it is called "<prefix>gripper_joint";
+         this workspace has always known "rg6_finger_joint", and that name stands
+         in /joint_states, in the profile, in the SRDF patch, in the gripper
+         bridge and in the MuJoCo scenes.  A parameter here saves a rename on the
+         wire.  Empty = the upstream default. -->
     <xacro:property name="driver"
                     value="${driver_joint if driver_joint else gripper_name + '_joint'}"/>
     <!-- load config from file -->
@@ -212,14 +212,14 @@
           </geometry>
           <material name="onrobot/light_grey"/>
         </visual>
-        <!-- ZWEI Kollisionen, und zwar die dafuer gelieferten: die Spitze ist als konvexe
-             Zerlegung modelliert (finger_tip_1 und finger_tip_2), waehrend jedes andere Glied
-             hier ohnehin sein collision/-Mesh benutzt.  Upstream zeigt an dieser einen Stelle
-             auf das SICHTNETZ, und das ist die Greifflaeche: 2154 Dreiecke, konkav, und jede
-             Engine, die konvexifiziert, blaeht sie auf das 2,04-fache ihres Volumens auf
-             (2026-08-28 gemessen).  Die beiden Kollisionsteile sind bereits konvex
-             (Huelle/Netz = 1,00) und zusammen 236 + 176 Dreiecke.  Upstream fuehrte den Block
-             doppelt, aber mit demselben Sichtnetz -- daher die Zerlegung statt einer Kopie. -->
+        <!-- TWO collisions, and namely the ones shipped for it: the tip is modelled as a
+             convex decomposition (finger_tip_1 and finger_tip_2), while every other link here
+             uses its collision/ mesh anyway.  At this one place upstream points at the VISUAL
+             mesh, and that is the gripping face: 2154 triangles, concave, and every engine that
+             convexifies inflates it to 2.04 times its volume (measured 2026-08-28).  The two
+             collision parts are convex already (hull/mesh = 1.00) and together 236 + 176
+             triangles.  Upstream carried the block twice, but with the same visual mesh -- hence
+             the decomposition instead of a copy. -->
         <collision>
           <geometry>
             <mesh filename="package://rg6_description/meshes/${model}/collision/finger_tip_1.stl"/>

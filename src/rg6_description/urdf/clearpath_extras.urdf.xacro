@@ -1,37 +1,37 @@
 <?xml version="1.0"?>
 <!--
-  Clearpath URDF-EXTRAS fuer a200-0553.
-  Wird vom Clearpath-Generator eingebunden ueber robot.yaml:
+  Clearpath URDF EXTRAS for the a200-0553.
+  Pulled in by the Clearpath generator through robot.yaml:
       platform:
         extras:
           urdf:
             path: /home/robot/onrobot-rg6/.../clearpath_extras.urdf.xacro
 
-  Haengt NUR neue Links/Joints an bereits vom Generator erzeugte Frames an:
-    - arm_0_tool0   = UR5 Tool-Frame (ROS-Industrial all-zeros)  -> RG6-Greifer
-    - default_mount = Frame, auf dem der ArUco-Marker sitzt (TODO anpassen)
+  Hangs ONLY new links/joints onto frames the generator has already produced:
+    - arm_0_tool0   = UR5 tool frame (ROS-Industrial all-zeros)  -> RG6 gripper
+    - default_mount = frame the ArUco marker sits on (TODO: adjust)
 
-  GREIFERMODELL:
-    Sauber artikuliertes RG6 aus package 'rg6_description' (Robotiq-Stil:
-    outer_knuckle/inner_knuckle/inner_finger pro Seite). Treibergelenk =
-    'rg6_finger_joint' (Praefix 'rg6_'): 0 = offen, positiv = zu. Die 5
-    Folgegelenke haengen per <mimic> (offizielle OnRobot-Multiplier) am
-    Treibergelenk -> MoveIt animiert sie im Planungs-Preview, der ROS2
-    robot_state_publisher berechnet sie fuer /tf (Foxglove). Der
-    rg6_joint_state_broadcaster publiziert zusaetzlich alle 6 Gelenke explizit
-    (Fallback / Live-Tuning des AI2-Mappings); Werte identisch zu <mimic>.
-    Kollision = eine grobe Box am base_link (keine Selbstkollision in MoveIt).
+  GRIPPER MODEL:
+    A cleanly articulated RG6 from package 'rg6_description' (Robotiq style:
+    outer_knuckle/inner_knuckle/inner_finger per side). Driver joint =
+    'rg6_finger_joint' (prefix 'rg6_'): 0 = open, positive = closed. The 5
+    dependent joints hang on the driver joint via <mimic> (the official OnRobot
+    multipliers) -> MoveIt animates them in the planning preview, the ROS 2
+    robot_state_publisher computes them for /tf (Foxglove). The
+    rg6_joint_state_broadcaster additionally publishes all 6 joints explicitly
+    (fallback / live tuning of the AI2 mapping); the values match <mimic>.
+    Collision = one coarse box at the base_link (no self-collision in MoveIt).
 
-  VORAUSSETZUNG: 'rg6_description' muss in einem in robot.yaml unter
-  'system.ros2.workspaces' eingetragenen Workspace installiert sein, sonst findet
-  die foxglove_bridge die package://-Meshes nicht.
+  PRECONDITION: 'rg6_description' has to be installed in a workspace listed in
+  robot.yaml under 'system.ros2.workspaces', otherwise the foxglove_bridge does
+  not find the package:// meshes.
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
   <material name="white"><color rgba="0.9137 0.9137 0.9137 1.0"/></material>
 
-  <!-- =========================== ArUco-Marker =========================== -->
-  <!-- TODO: MARKER_PARENT + Offset an die reale Position anpassen. -->
+  <!-- =========================== ArUco marker =========================== -->
+  <!-- TODO: adjust MARKER_PARENT + offset to the real position. -->
   <link name="aruco_marker">
     <visual>
       <geometry><box size="0.11 0.11 0.001"/></geometry>
@@ -39,82 +39,83 @@
     </visual>
   </link>
   <joint name="aruco_to_base" type="fixed">
-    <parent link="top_plate_front_mount"/>          <!-- TODO: korrektes Frame -->
+    <parent link="top_plate_front_mount"/>          <!-- TODO: the correct frame -->
     <child link="aruco_marker"/>
-    <origin rpy="0 0 0" xyz="-0.062 -0.142 0"/>  <!-- TODO: realer Offset -->
+    <origin rpy="0 0 0" xyz="-0.062 -0.142 0"/>  <!-- TODO: the real offset -->
   </joint>
 
-  <!-- ===================== RG6-Greifer an arm_0_tool0 =================== -->
-  <!-- Modell aus onrobot_description (rg6_v2, MIT, INRIA), einvendort;
-       Herkunft und Aenderungen in ../../../LICENSE-THIRD-PARTY.md.
+  <!-- ===================== RG6 gripper at arm_0_tool0 =================== -->
+  <!-- Model from onrobot_description (rg6_v2, MIT, INRIA), vendored; origin and
+       changes in ../../../LICENSE-THIRD-PARTY.md.
 
-       KEIN Montageversatz: das single_bracket schraubt unmittelbar auf den
-       UR-Flansch (2026-08-19 am Geraet nachgesehen).  Sein Fuss IST die
-       Kopplungsflaeche, 71 mm Durchmesser.  Dazwischen liegt nur der
-       0,4-mm-Zentrierring des Flansches, und der ist eine Vertiefung.
+       NO mounting offset: the single_bracket screws straight onto the UR
+       flange (looked at on the device on 2026-08-19).  Its foot IS the coupling
+       face, 71 mm in diameter.  Between them lies only the 0.4 mm centring ring
+       of the flange, and that is a recess.
 
-       driver_joint haelt den Namen fest, den der ganze Workspace kennt:
-       rg6_finger_joint, 0 = offen, positiv = zu.  Die Folgegelenke haengen
-       per mimic daran.
+       driver_joint pins the name the whole workspace knows:
+       rg6_finger_joint, 0 = open, positive = closed.  The dependent joints hang
+       on it by mimic.
 
-       KEINE Drehung.  Das ALTE Modell brauchte hier rpy="0 0 -1.5708", und
-       sein Kommentar sagte selbst, das sei erprobt ("falls noch verdreht, je
-       90 Grad variieren").  Diese Zahl gehoerte zu jenem Mesh; mitgeschleppt
-       stand der Greifer am 2026-08-19 sichtbar um 90 Grad verdreht.
-       Nachgemessen als Oeffnungsrichtung der Finger im Flanschrahmen:
-         altes Modell, rpy 0 0 -1.5708 -> [-1  0  0]   (so sah es korrekt aus)
-         neues Modell, rpy 0 0  0      -> [-1  0  0]   deckungsgleich
-         neues Modell, rpy 0 0 -1.5708 -> [ 0 +1  0]   die 90 Grad
-       Die Oeffnungsachse allein entscheidet das NICHT: sie ist eine Gerade,
-       [-1 0 0] und [+1 0 0] sind dieselbe, und welcher Finger im jeweiligen
-       Modell "1" heisst, ist willkuerlich.  0 und 180 Grad sind daran also
-       nicht unterscheidbar.  Der Owner hat am 2026-08-19 gesehen, dass ohne
-       Drehung 180 Grad fehlen; daher pi.  Wer es genauer will, misst an einem
-       UNSYMMETRISCHEN Merkmal (Kabelausgang, Sicherheitsschalter). -->
+       NO rotation.  The OLD model needed rpy="0 0 -1.5708" here, and its own
+       comment said that was found by trial ("if still twisted, vary in steps of
+       90 degrees").  That number belonged to that mesh; carried over, the
+       gripper stood visibly twisted by 90 degrees on 2026-08-19.  Measured as
+       the opening direction of the fingers in the flange frame:
+         old model, rpy 0 0 -1.5708 -> [-1  0  0]   (this is how it looked right)
+         new model, rpy 0 0  0      -> [-1  0  0]   congruent
+         new model, rpy 0 0 -1.5708 -> [ 0 +1  0]   the 90 degrees
+       The opening axis alone does NOT decide this: it is a straight line,
+       [-1 0 0] and [+1 0 0] are the same one, and which finger is called "1" in
+       either model is arbitrary.  0 and 180 degrees are therefore not
+       distinguishable by it.  The owner saw on 2026-08-19 that 180 degrees are
+       missing without the rotation; hence pi.  Whoever wants it more precisely
+       measures at an ASYMMETRIC feature (cable outlet, safety switch). -->
   <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg_upstream.urdf.xacro"/>
   <xacro:onrobot_rg parent="arm_0_tool0" prefix="rg6_" model="rg6_v2"
                     driver_joint="rg6_finger_joint">
     <origin xyz="0 0 0" rpy="0 0 3.14159"/>
   </xacro:onrobot_rg>
 
-  <!-- Alter Name, GENAU alter Ort.  rg6_onrobot_rg6_base_link ist mehr als ein
-       Bezugspunkt fuer SRDF-Patch und MuJoCo-Szenen: die robot.yaml haengt die
-       KAMERA daran (camera_0_joint, xyz 0,023/0/0,125, rpy 0/-1,5708/-3,14).
-       Alles, was diesen Link verschiebt oder dreht, verschiebt die Kamera mit.
+  <!-- The old name, EXACTLY the old place.  rg6_onrobot_rg6_base_link is more
+       than a reference point for the SRDF patch and the MuJoCo scenes: robot.yaml
+       hangs the CAMERA on it (camera_0_joint, xyz 0.023/0/0.125,
+       rpy 0/-1.5708/-3.14).  Everything that moves or turns this link moves the
+       camera with it.
 
-       Erste Fassung haengte ihn an rg6_gripper_body; das sitzt 56,1 mm ueber
-       dem Flansch, die Kamera stand damit 56 mm zu hoch UND mitgedreht.  Er
-       haengt deshalb direkt an arm_0_tool0 und reproduziert exakt das alte
-       rg6_tool0_to_base: Ursprung am Flansch, rpy 0 0 -1,5708.  Damit ist er
-       vom Greifermodell ENTKOPPELT; wie dessen Mesh gedreht wird, ist eine
-       andere Frage und darf die Kamera nicht mehr anfassen. -->
+       The first version hung it on rg6_gripper_body; that sits 56.1 mm above the
+       flange, which put the camera 56 mm too high AND turned along.  It therefore
+       hangs directly on arm_0_tool0 and reproduces the old rg6_tool0_to_base
+       exactly: origin at the flange, rpy 0 0 -1.5708.  That DECOUPLES it from the
+       gripper model; how the latter's mesh is turned is a separate question and
+       must not touch the camera any more. -->
   <link name="rg6_onrobot_rg6_base_link"/>
   <joint name="rg6_base_link_alias" type="fixed">
     <parent link="arm_0_tool0"/><child link="rg6_onrobot_rg6_base_link"/>
     <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
   </joint>
 
-  <!-- Greifer-TCP.  DERSELBE physische Punkt wie im alten Modell: 210 mm ueber
-       der Kopplungsflaeche, am Anfang der Padflaeche.  Das neue Modell setzt
-       seinen grasp_frame 58,1 mm weiter vorn (nahe dem Pad-ENDE); ihn zu
-       uebernehmen haette den TCP still verschoben und jede kalibrierte Groesse
-       entwertet (descend_offset, floor_height, camera_xy_offset).  Am
-       2026-08-19 bewusst so entschieden; wohin der TCP physikalisch gehoert,
-       ist eine eigene Frage (ROBOTER-TODO R19/R23).
-       Ausgedrueckt gegen grasp_frame, damit er an der Modellgeometrie haengt
-       und nicht wieder an einer freien Zahl. -->
+  <!-- Gripper TCP.  THE SAME physical point as in the old model: 210 mm above
+       the coupling face, at the start of the pad surface.  The new model puts its
+       grasp_frame 58.1 mm further forward (near the END of the pad); taking that
+       over would have moved the TCP silently and devalued every calibrated
+       quantity (descend_offset, floor_height, camera_xy_offset).  Deliberately
+       decided that way on 2026-08-19; where the TCP physically belongs is a
+       question of its own (ROBOTER-TODO R19/R23).
+       Expressed against grasp_frame, so that it hangs on the model geometry and
+       not on a free number again. -->
   <link name="rg6_hand_tcp"/>
   <joint name="rg6_hand_tcp_joint" type="fixed">
     <parent link="rg6_gripper_grasp_frame"/><child link="rg6_hand_tcp"/>
     <origin xyz="0 0 -0.0581" rpy="0 0 0"/>
   </joint>
 
-  <!-- ===== Custom Top-Assembly (ersetzt a200.sensor_arch) ===== -->
+  <!-- ===== custom top assembly (replaces a200.sensor_arch) ===== -->
   <link name="husky_top_assembly">
-    <!-- glTF (selbst-enthaltend, 2 Materialien) statt STL -> Materialien sichtbar.
-         KEIN <material> hier setzen, sonst werden die glTF-Materialien ueberschrieben.
-         Hinweis: glTF ist Y-up (Onshape-Export); falls das Modell ggue. der STL um
-         90deg verkippt erscheint, rpy nachziehen (typisch +/-1.5708 um X). -->
+    <!-- glTF (self-contained, 2 materials) instead of STL -> materials visible.
+         Do NOT set a <material> here, or the glTF materials get overwritten.
+         Note: glTF is Y-up (Onshape export); if the model appears tilted by 90deg
+         against the STL, adjust rpy (typically +/-1.5708 about X). -->
     <visual>
       <origin xyz="0 0 0" rpy="0 0 -1.5708"/>
       <geometry>
@@ -122,53 +123,53 @@
       </geometry>
     </visual>
 
-    <!-- KOLLISION (ROBOTER-TODO R15).  Bis 2026-08-20 hatte dieser Link NUR
-         <visual>: im Viewer sichtbar, fuer move_group nicht vorhanden.  Eine
-         Bahn konnte durch den Buegel fuehren, ohne dass Planer oder
-         check_state_validity es bemerkt haetten.  Der Buegel steht 0,772 m von
-         der Armbasis, der UR5 reicht 0,85 m - er ist erreichbar.
+    <!-- COLLISION (ROBOTER-TODO R15).  Until 2026-08-20 this link had ONLY a
+         <visual>: visible in the viewer, non-existent for move_group.  A path
+         could lead straight through the arch without the planner or
+         check_state_validity noticing.  The arch stands 0.772 m from the arm
+         base, the UR5 reaches 0.85 m - it is reachable.
 
-         KEINE Gesamt-Bounding-Box.  Das Mesh fuellt seine Huelle nur zu 2,4 %
-         aus (2,3 L Struktur in 91,3 L Huelle); eine einzelne Box haette das
-         ganze Heck zugemauert und legitime Bahnen blockiert.  Stattdessen
-         sechs Kaesten entlang der tatsaechlichen Struktur - zwei Portalbeine,
-         Quertraeger, Sensorkopf, zwei Fuesse mit Diagonalstrebe: zusammen
-         5,87 L.  Nachgerechnet: ALLE 4560 Mesh-Vertices liegen darin.
+         NO overall bounding box.  The mesh fills its hull to only 2.4 %
+         (2.3 L of structure in a 91.3 L hull); a single box would have walled up
+         the whole rear and blocked legitimate paths.  Instead six boxes along the
+         actual structure - two portal legs, cross beam, sensor head, two feet
+         with a diagonal strut: 5.87 L together.  Recomputed: ALL 4560 mesh
+         vertices lie inside them.
 
-         Die Kaesten stehen im MESH-Frame, deshalb tragen sie dieselbe
-         rpy="0 0 -1.5708" wie das <visual> oben.  Wer eine Zahl aendert, aendert
-         sie im Mesh-Frame und dreht sie NICHT von Hand mit.
+         The boxes stand in the MESH frame, which is why they carry the same
+         rpy="0 0 -1.5708" as the <visual> above.  Whoever changes a number
+         changes it in the mesh frame and does NOT rotate it by hand.
 
-         2 mm ueber dem Fuss abgeschnitten (z beginnt bei 0,002 statt 0,000).
-         Der Link-Ursprung sitzt bei Welt-z 0,2307 - exakt auf der Oberkante
-         von top_plate_link (0,2240..0,2307).  Bei z=0 beruehren sich beide
-         Koerper, und MoveIt liest eine Beruehrung als DAUERKOLLISION: der
-         Roboter waere in jeder Stellung ungueltig, move_group haette nichts
-         mehr geplant.  Die 2 mm sind kein Modellverlust - dort steht die
-         Deckplatte, die selbst Kollisionsgeometrie hat.  Alternative waere ein
-         disable_collisions-Eintrag in der SRDF gewesen; die wird generiert,
-         der Schnitt hier haelt die Aenderung in EINER Datei. -->
-    <collision>  <!-- Portalbein links -->
+         Cut off 2 mm above the foot (z starts at 0.002 instead of 0.000).  The
+         link origin sits at world z 0.2307 - exactly on the upper edge of
+         top_plate_link (0.2240..0.2307).  At z=0 the two bodies touch, and MoveIt
+         reads a touch as a PERMANENT COLLISION: the robot would be invalid in
+         every pose, and move_group would have planned nothing at all.  The 2 mm
+         are no loss of model - the top plate stands there, and it carries
+         collision geometry of its own.  The alternative would have been a
+         disable_collisions entry in the SRDF; that one is generated, and the cut
+         here keeps the change in ONE file. -->
+    <collision>  <!-- portal leg, left -->
       <origin xyz="0.0500 -0.0475 0.2510" rpy="0 0 -1.5708"/>
       <geometry><box size="0.035 0.030 0.498"/></geometry>
     </collision>
-    <collision>  <!-- Portalbein rechts -->
+    <collision>  <!-- portal leg, right -->
       <origin xyz="0.0500 -0.5725 0.2510" rpy="0 0 -1.5708"/>
       <geometry><box size="0.035 0.030 0.498"/></geometry>
     </collision>
-    <collision>  <!-- Quertraeger oben -->
+    <collision>  <!-- cross beam, top -->
       <origin xyz="0.0500 -0.3100 0.4900" rpy="0 0 -1.5708"/>
       <geometry><box size="0.560 0.030 0.050"/></geometry>
     </collision>
-    <collision>  <!-- Sensorkopf -->
+    <collision>  <!-- sensor head -->
       <origin xyz="0.0500 -0.3150 0.5500" rpy="0 0 -1.5708"/>
       <geometry><box size="0.120 0.120 0.100"/></geometry>
     </collision>
-    <collision>  <!-- Fuss links, inkl. Diagonalstrebe -->
+    <collision>  <!-- foot, left, incl. diagonal strut -->
       <origin xyz="0.1500 -0.0475 0.0810" rpy="0 0 -1.5708"/>
       <geometry><box size="0.035 0.230 0.158"/></geometry>
     </collision>
-    <collision>  <!-- Fuss rechts, inkl. Diagonalstrebe -->
+    <collision>  <!-- foot, right, incl. diagonal strut -->
       <origin xyz="0.1500 -0.5725 0.0810" rpy="0 0 -1.5708"/>
       <geometry><box size="0.035 0.230 0.158"/></geometry>
     </collision>

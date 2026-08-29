@@ -1,28 +1,27 @@
-// rg6_control_sim: Simulations-Zwilling des Greifers OHNE Hardware.
+// rg6_control_sim: the simulation twin of the gripper WITHOUT hardware.
 //
-// MASSGEBLICH ist die Oberflaeche von rg6_grip_bridge, dem Node, der den RG6 am
-// echten Roboter per XML-RPC an der OnRobot-URCap kommandiert.  Was der Mock
-// davon nachbildet, ist genau das und nicht mehr:
-//   Action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
-//   Topic    rg6/bridge_state + das Treibergelenk auf joint_states
+// AUTHORITATIVE is the surface of rg6_grip_bridge, the node that commands the
+// RG6 on the real robot over XML-RPC at the OnRobot URCap.  What the mock
+// reproduces of it is exactly that and no more:
+//   action   rg6_gripper_controller/gripper_cmd (control_msgs/GripperCommand)
+//   topic    rg6/bridge_state plus the driver joint on joint_states
 //
-// Ein Mock, der eine Oberflaeche nachbildet, die es nirgends gibt, ist eine
-// Vorlage fuer Code gegen etwas, das nicht existiert.
+// A mock that reproduces a surface existing nowhere is a template for code
+// written against something that does not exist.
 //
-// Das Treibergelenk auf joint_states animiert das Modell in RViz/Foxglove, die
-// MoveIt-Integration ist damit komplett ohne Roboter testbar.  Die fuenf
-// Folgegelenke haengen im rg6_v2 per <mimic> am Treiber und werden von
-// robot_state_publisher und move_group selbst abgeleitet.
+// The driver joint on joint_states animates the model in RViz/Foxglove, which
+// makes the MoveIt integration testable entirely without a robot.  The five
+// dependent joints hang on the driver in the rg6_v2 via <mimic> and are derived
+// by robot_state_publisher and move_group themselves.
 //
-// Bewegungsmodell: Weite faehrt mit konstanter Geschwindigkeit auf die Zielweite.
-// Mit sim_object_width_m > 0 stoppt das Schliessen an der Objektweite ->
-// grip_detected=true (wie das Tool-DI0-Signal der echten Hardware).
+// Motion model: the width travels towards the target width at a constant speed.
+// With sim_object_width_m > 0 the closing stops at the object width ->
+// grip_detected=true (like the tool DI0 signal of the real hardware).
 //
-// Grenze: das macht den Greifer im Container benutzbar, mehr nicht.  Die echten
-// RG6-Pathologien bleiben unabgedeckt (AI2 haengt bei zuen Backen auf 10 V, ein
-// injizierter grip reisst ExternalControl ab).  Ein Erfolg aus diesem Node ist
-// ueber das source-Feld in /twin/result ohnehin als Nicht-Hardware-Wahrheit
-// gekennzeichnet.
+// The limit: this makes the gripper usable in the container, no more.  The real
+// RG6 pathologies stay uncovered (AI2 sticks at 10 V on closed jaws, an injected
+// grip tears ExternalControl off).  A success out of this node is marked as a
+// non-hardware truth by the source field in /twin/result anyway.
 
 #include <algorithm>
 #include <atomic>
@@ -59,12 +58,12 @@ class RG6ControlSimNode : public rclcpp::Node
 {
 public:
   RG6ControlSimNode()
-  : Node("rg6_control_node")  // gleicher Node-Name wie real -> identische Graph-Sicht
+  : Node("rg6_control_node")  // the same node name as the real one -> an identical graph view
   {
     declare_parameter<double>("width_open_m", 0.160);
     declare_parameter<double>("width_closed_m", 0.0);
-    declare_parameter<double>("sim_speed_m_s", 0.16);       // voller Hub in ~1 s
-    declare_parameter<double>("sim_object_width_m", 0.0);   // 0 = kein Objekt
+    declare_parameter<double>("sim_speed_m_s", 0.16);       // the full stroke in ~1 s
+    declare_parameter<double>("sim_object_width_m", 0.0);   // 0 = no object
     declare_parameter<double>("grip_default_force_n", 60.0);
     declare_parameter<double>("motion_timeout_s", 10.0);
     declare_parameter<double>("state_rate", 20.0);
@@ -77,12 +76,12 @@ public:
 
     blocking_cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
 
-    // Der Zustand als flaches JSON, unter dem Namen, den auch rg6_grip_bridge
-    // am Roboter benutzt.  Ohne ihn liest der plan_server im Container ins
-    // Leere -- der Greiferzustand ist dann auf beiden Stufen unbeantwortbar.
+    // The state as flat JSON, under the name rg6_grip_bridge uses on the robot
+    // as well.  Without it the plan_server in the container reads into the void
+    // -- the gripper state is then unanswerable on both rungs.
     bridge_state_pub_ = create_publisher<std_msgs::msg::String>(
       "rg6/bridge_state", rclcpp::QoS(10));
-    // 'joint_states' relativ -> per Launch-Remap auf das gewuenschte Topic legen
+    // 'joint_states' is relative -> put it on the wanted topic by a launch remap
     // (a200-0553: manipulators/endeffectors/joint_states).
     joint_pub_ = create_publisher<sensor_msgs::msg::JointState>("joint_states", rclcpp::QoS(10));
 
@@ -106,12 +105,12 @@ public:
       rcl_action_server_get_default_options(), blocking_cb_group_);
 
     RCLCPP_INFO(get_logger(),
-      "RG6-SIM bereit (Weite %.0f mm offen). sim_object_width_m=%.3f",
+      "RG6 SIM ready (width %.0f mm open). sim_object_width_m=%.3f",
       width_ * 1000.0, get_parameter("sim_object_width_m").as_double());
   }
 
 private:
-  // --------- Bewegungsmodell (50-Hz-Tick) ---------------------------------
+  // --------- motion model (50 Hz tick) -------------------------------------
   void tick()
   {
     const double dt = 0.02;
@@ -119,7 +118,7 @@ private:
     const double object_w = get_parameter("sim_object_width_m").as_double();
     std::lock_guard<std::mutex> lk(mutex_);
     double effective_target = target_width_;
-    // Objekt im Weg? Schliessen stoppt an der Objektweite -> grip detected.
+    // An object in the way? The closing stops at the object width -> grip detected.
     if (object_w > 0.0 && effective_target < object_w && width_ >= object_w) {
       effective_target = object_w;
     }
@@ -140,19 +139,18 @@ private:
 
   void publish_joints_locked()
   {
-    // NUR das Treibergelenk -- genau wie rg6_grip_bridge am echten Roboter.
+    // ONLY the driver joint -- exactly like rg6_grip_bridge on the real robot.
     //
-    // Die Folgegelenke des rg6_v2 (finger_joint_mirror,
-    // gripper_finger_{1,2}_truss_arm_joint und _finger_tip_joint) haengen per
-    // <mimic> am Treiber; robot_state_publisher und move_group leiten sie
-    // selbst ab, ein zweiter Absender ist ueberfluessig.
+    // The dependent joints of the rg6_v2 (finger_joint_mirror,
+    // gripper_finger_{1,2}_truss_arm_joint and _finger_tip_joint) hang on the
+    // driver via <mimic>; robot_state_publisher and move_group derive them
+    // themselves, a second sender is superfluous.
     //
-    // Er waere auch gefaehrlich:  ein RobotState, der einen Gelenknamen
-    // traegt, den das Modell nicht kennt, bringt move_group ueber
-    // RobotModel::getVariableIndex zum ABSTURZ (std::terminate, SIGABRT --
-    // nachgestellt und zweimal reproduziert).  Jeder Verbraucher, der
-    // joint_states liest und in eine MoveIt-Anfrage zurueckgibt, waere damit
-    // eine Abschussrampe.
+    // It would also be dangerous:  a RobotState carrying a joint name the model
+    // does not know CRASHES move_group through RobotModel::getVariableIndex
+    // (std::terminate, SIGABRT -- staged and reproduced twice).  Every consumer
+    // that reads joint_states and hands it back into a MoveIt request would be a
+    // launch pad for that.
     sensor_msgs::msg::JointState msg;
     msg.header.stamp = get_clock()->now();
     msg.name = {get_parameter("joint_prefix").as_string() + "finger_joint"};
@@ -160,14 +158,13 @@ private:
     joint_pub_->publish(msg);
   }
 
-  // Weite <-> Fingergelenk kommen aus der Tabelle, die aus dem GENERIERTEN
-  // URDF des rg6_v2-Modells stammt (finger_kinematics.hpp, erzeugt von
+  // Width <-> finger joint come from the table derived from the GENERATED URDF
+  // of the rg6_v2 model (finger_kinematics.hpp, produced by
   // tools/derive_finger_kinematics.py).
   //
-  // Die Tabelle, nicht eine Kurbelschwingen-Formel:  eine nachgerechnete
-  // Linkage verfehlt beim rg6_v2 sowohl die Weite bei q=0 (153,2 mm) als auch
-  // die Gelenkgrenzen (0,0 bis 1,25478 rad) und stellt den Greifer damit in
-  // Stellungen, die es nicht gibt.
+  // The table, not a crank-rocker formula:  a recomputed linkage misses both the
+  // width at q=0 (153.2 mm) and the joint limits (0.0 to 1.25478 rad) on the
+  // rg6_v2 and thereby puts the gripper into poses that do not exist.
   static double angle_from_width(double width_m)
   {
     return rg6_control::finger_kinematics::angle_from_width(width_m);
@@ -224,7 +221,7 @@ private:
     return result;
   }
 
-  // --------- GripperCommand-Action -----------------------------------------
+  // --------- GripperCommand action -----------------------------------------
   void action_execute(const std::shared_ptr<GoalHandleGripperCommand> goal_handle)
   {
     auto result = std::make_shared<GripperCommand::Result>();
@@ -284,14 +281,14 @@ private:
     }
   }
 
-  // --------- Zustands-Publisher --------------------------------------------
-  // Die Felder von rg6_grip_bridge.status_payload(), Zeichen fuer Zeichen --
-  // wer hier etwas umbenennt, macht den Container zum Sonderfall.
+  // --------- state publisher ------------------------------------------------
+  // The fields of rg6_grip_bridge.status_payload(), character for character --
+  // whoever renames something here makes the container a special case.
   //
-  // "status" und "safety_failed" kommen am Geraet aus rg_get_status /
-  // rg_get_safety_failed.  Der Sim hat keine Stoerung zu melden und schreibt
-  // deshalb 0 / false; das ist keine Behauptung ueber Hardware, sondern die
-  // ehrliche Aussage "in dieser Simulation gibt es nichts zu stoeren".
+  // "status" and "safety_failed" come from rg_get_status / rg_get_safety_failed
+  // on the device.  The sim has no fault to report and therefore writes
+  // 0 / false; that is not a claim about hardware but the honest statement
+  // "in this simulation there is nothing to disturb".
   void publish_bridge_state()
   {
     std::ostringstream os;

@@ -17,10 +17,9 @@ import math
 import subprocess
 import sys
 
+import derive_finger_kinematics as gen
 import numpy as np
 import pytest
-
-import derive_finger_kinematics as gen
 
 
 # ---- _rpy_to_R: the rotation the whole chain rests on ---------------------------------------------------------

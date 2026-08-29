@@ -29,7 +29,6 @@ import subprocess
 
 import pytest
 import yaml
-
 from table_sources import sibling
 
 PROFILE_RELPATH = "contract/robot-contract/src/robot_contract/profiles/a200_0553.yaml"

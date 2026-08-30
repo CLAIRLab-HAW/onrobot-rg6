@@ -218,7 +218,7 @@
              mesh, and that is the gripping face: 2154 triangles, concave, and every engine that
              convexifies inflates it to 2.04 times its volume (measured 2026-08-28).  The two
              collision parts are convex already (hull/mesh = 1.00) and together 236 + 176
-             triangles.  Upstream carried the block twice, but with the same visual mesh -- hence
+             triangles.  Upstream carried the block twice, but with the same visual mesh, hence
              the decomposition instead of a copy. -->
         <collision>
           <geometry>

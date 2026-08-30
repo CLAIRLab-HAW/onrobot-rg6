@@ -7,6 +7,17 @@ how it embeds into the onboard stack in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
+## 2026-08-30 (the gripper URDF parses again)
+
+- **An XML comment cannot contain `--`.** The English rewrite of 2026-08-29 left `visual mesh -- hence` in the
+  collision-block comment of `onrobot_rg_upstream.urdf.xacro`, which makes the file not well-formed. Every
+  consumer of the robot URDF fails on it: `mock` aborts in `_process_urdf` with
+  `ExpatError: not well-formed (invalid token): line 221, column 91`, so `move_group` never comes up and the whole
+  offboard stack stays down.
+- It stayed invisible because the container images had the pre-rewrite file baked in; a rebuild is what surfaced
+  it. The em-dash of the prose is now a comma -- the only place in the workspace where the sentence and the file
+  format disagree about `--`.
+
 ## 2026-08-29 (the prose and the output of this repo are English)
 
 - **`rg6_moveit_patch` logs, help texts and SRDF marker are English.** The marker line inserted into

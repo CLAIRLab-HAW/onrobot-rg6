@@ -7,6 +7,12 @@ how it embeds into the onboard stack in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
+## 2026-08-30 (ruff resolves the same settings from anywhere)
+
+- **CI pins `ruff>=0.16.5,<0.17`** -- the minor the lint scope was measured against, the same bound the
+  workspace dev group carries. Unpinned, a ruff release can stabilise new rules and turn this CI red without
+  a commit of ours.
+
 ## 2026-08-30 (the gripper URDF parses again)
 
 - **An XML comment cannot contain `--`.** The English rewrite of 2026-08-29 left `visual mesh -- hence` in the

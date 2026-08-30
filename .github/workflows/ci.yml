@@ -63,7 +63,9 @@ jobs:
       # against the system interpreter), so the dependencies are named rather than resolved.  robot_contract is
       # installed from its checkout instead of being named: the suite compares against ITS interpolation code, so a
       # release from PyPI -- if there were one -- would be the wrong thing to measure.
-      - run: pip install numpy pyyaml pytest ruff
+      # ruff is pinned to the minor the lint scope was measured against (same bound as the workspace dev
+      # group): an unpinned install lets a ruff release stabilise new rules and turn this CI red with no commit.
+      - run: pip install numpy pyyaml pytest 'ruff>=0.16.5,<0.17'
       - run: pip install ./contract/robot-contract
 
       - run: cd robot/onrobot-rg6 && ruff check --select E9,F63,F7,F82 .

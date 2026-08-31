@@ -13,7 +13,8 @@ mock that offers the same surface without hardware.
 ## Features
 
 - **The measured rg6_v2 model** (`rg6_description`): URDF/Xacro, visual and
-  collision meshes, Clearpath extras glue.
+  collision meshes. Where the hand is mounted on the a200-0553 is not here but
+  in [husky-extras](../husky-extras/README.md).
 - **One interface on both stages** — `rg6_gripper_controller/gripper_cmd` and
   `rg6/bridge_state`, whether the real bridge or the container mock answers.
 - **MoveIt wiring that survives a reboot**: `rg6_moveit_patch` writes the SRDF
@@ -81,7 +82,7 @@ UR tool interface.
 
 | Package | Type | Contents |
 |---|---|---|
-| `rg6_description` | `ament_cmake` | the measured **RG6 v2** model: URDF/Xacro, visual + collision meshes, `config/rg6_v2.yaml`, Clearpath extras glue (`clearpath_extras.urdf.xacro`) |
+| `rg6_description` | `ament_cmake` | the measured **RG6 v2** model: URDF/Xacro, visual + collision meshes, `config/rg6_v2.yaml` |
 | `rg6_control` | `ament_cmake` (C++) | `rg6_control_sim` (container mock), `joint_state_relay`, `joint_state_aggregator`, `joint_states.launch.py`, `scripts/rg6_moveit_patch`, `include/rg6_control/finger_kinematics.hpp` |
 | `tools/` | — | `derive_finger_kinematics.py`: regenerates the gear table from the URDF |
 
@@ -222,8 +223,11 @@ up to 17 mm and is not a second opinion.
 ## Using it on the Clearpath Husky (a200-0553)
 
 Workspace in `system.ros2.workspaces`, `io_and_status_controller` via
-`robot.yaml` `ros_parameters`, visual model via `platform.extras.urdf`
-(`clearpath_extras.urdf.xacro`). The gripper publishes joint states on
+`robot.yaml` `ros_parameters`. Into the robot's URDF the gripper comes through
+`platform.extras.urdf`, which addresses a file in
+[husky-extras](../husky-extras/README.md): that one instantiates the macro from
+this package at `arm_0_tool0`. Both workspaces have to be listed, the second one
+expands `$(find rg6_description)`. The gripper publishes joint states on
 `manipulators/endeffectors/joint_states`.
 
 ## Safety

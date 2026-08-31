@@ -8,9 +8,12 @@ This fork's URDF is xacro-based and does not contain the `g_main` joint or the
 `rg6_description.xacro` file from the original fusion2urdf output. The gripper
 itself — links, finger joints and their `<mimic>` multipliers — comes from the
 upstream rg6_v2 model in `urdf/onrobot_rg_upstream.urdf.xacro` (see
-[LICENSE-THIRD-PARTY](../../LICENSE-THIRD-PARTY.md)). What this workspace adds
-sits in `urdf/clearpath_extras.urdf.xacro`: the base link
-`rg6_onrobot_rg6_base_link`, the fixed transform from the UR tool to it
-(`rg6_tool0_to_base`, `parent arm_0_tool0` → `child
-rg6_onrobot_rg6_base_link`) and the TCP frame. Adjust the `rpy` there if the
-adapter angle changes.
+[LICENSE-THIRD-PARTY](../../LICENSE-THIRD-PARTY.md)), the measured limits and
+mass properties from `config/rg6_v2.yaml`.
+
+This package describes the HAND and nothing else. Where the hand is bolted onto
+one particular robot — the mounting at `arm_0_tool0`, the alias link
+`rg6_onrobot_rg6_base_link` that `robot.yaml` hangs the camera on, and the
+`rg6_hand_tcp` frame — lives in
+[husky-extras](../../../husky-extras/README.md), which instantiates the macro
+above. Nothing here names a frame of the a200.

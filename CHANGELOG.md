@@ -8,6 +8,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
 
+## 2026-08-31 (this package describes a hand, not a robot)
+
+- **The Clearpath extras left for a repo of their own** (`husky-extras`,
+  `husky_extras_description`). `urdf/clearpath_extras.urdf.xacro` and
+  `meshes/husky_sensor_arch.gltf` are gone from `rg6_description`: the sensor arch and the ArUco marker are
+  platform parts, and the gripper block in that file was never the gripper but its MOUNTING -- it names
+  `arm_0_tool0`, `top_plate_rear_mount` and `top_plate_front_mount`, frames that exist only once the Clearpath
+  generator has built an a200 with a UR5 on it.
+- **What that cost while it was here: reusability.** A package that describes an RG6 *and* where it sits on one
+  particular Husky cannot be used on any other arm. It now describes the hand -- macro, meshes, measured
+  `rg6_v2.yaml` -- and knows no frame of the a200. The include runs the other way: the new package instantiates
+  `onrobot_rg_upstream.urdf.xacro`, and nothing points back here.
+- **`robot.yaml` addresses the file in the new repo now**, and lists its workspace next to this one's
+  (`system.ros2.workspaces`). Both are needed together: the generator finds the extras file by path and then
+  expands `$(find rg6_description)` through the ament index.
+- `tools/derive_link_inertia.py` keeps its box mode -- it reads boxes out of any link and takes the xacro as an
+  argument -- but the link it was written for, `husky_top_assembly`, is now in the neighbouring repo. Its
+  docstring says so rather than leaving a path that no longer exists.
+
 ## 2026-08-31 (the named posture 'open' is inside the joint it is defined on)
 
 - **`rg6_moveit_patch` wrote a `group_state` the joint cannot reach.** `--angle-open` defaulted to `0.0`, the

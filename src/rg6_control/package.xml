@@ -3,9 +3,9 @@
 <package format="3">
   <name>rg6_control</name>
   <version>0.2.0</version>
-  <description>Simulation gripper (rg6_control_sim), joint_state helper nodes
-    and the MoveIt patch for the OnRobot RG6.  No real driver: on the robot,
-    rg6_grip_bridge commands the RG6 via XML-RPC at the OnRobot URCap.</description>
+  <description>The OnRobot RG6 on both stages: rg6_grip_bridge commands the real gripper over XML-RPC at the
+    OnRobot URCap, rg6_control_sim serves the same action in the container mock.  Plus the joint_state helper
+    nodes and the MoveIt patch.</description>
   <maintainer email="hannes.voss@haw-hamburg.de">Hannes Voss</maintainer>
   <license>BSD-3-Clause</license>
 

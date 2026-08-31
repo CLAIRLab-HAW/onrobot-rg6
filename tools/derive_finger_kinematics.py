@@ -12,12 +12,13 @@ visible file with a date instead of a silent deviation.
 
     xacro robot.urdf.xacro > /tmp/robot.urdf
     python3 derive_finger_kinematics.py /tmp/robot.urdf \\
-        > <husky-custom-setup>/scripts/rg6_finger_kinematics.json
+        > src/rg6_control/scripts/rg6_finger_kinematics.json
     python3 derive_finger_kinematics.py /tmp/robot.urdf --format cpp \\
         > src/rg6_control/include/rg6_control/finger_kinematics.hpp
 
-Two output formats, ONE source.  The table is needed in two places that cannot import each other: the gripper bridge on
-the robot reads it as JSON, ``rg6_control_sim`` in the container needs it in C++.  Maintaining it twice by hand is
+Two output formats, ONE source, and since the bridge moved into ``rg6_control`` both land in this repo.  The table is
+needed in two places that cannot import each other: the gripper bridge on the robot reads it as JSON,
+``rg6_control_sim`` in the container needs it in C++.  Maintaining it twice by hand is
 exactly the second version the paragraph above warns about -- which is why this script produces both.
 """
 
@@ -99,9 +100,9 @@ HPP_HEAD = """\
 //
 // Joint angle {joint} [rad] -> clear width between the pad faces [m], measured
 // between the two flex_finger meshes.  The same table lies as JSON next to the
-// gripper bridge on the robot
-// (husky-custom-setup/scripts/rg6_finger_kinematics.json) and in the robot
-// profile (robot_contract, gripper.linkage.table).
+// gripper bridge (scripts/rg6_finger_kinematics.json, read by rg6_grip_bridge
+// on the robot) and in the robot profile (robot_contract,
+// gripper.linkage.table).
 //
 // There is no closed formula: the fingers are a four-bar chain.
 //

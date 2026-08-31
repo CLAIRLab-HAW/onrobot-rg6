@@ -5,13 +5,14 @@ TABLE (``tools/derive_finger_kinematics.py``).  It has to be readable in three p
 and so it was copied into three:
 
 * ``src/rg6_control/include/rg6_control/finger_kinematics.hpp`` -- the container mock, C++
-* ``robot/husky-custom-setup/scripts/rg6_finger_kinematics.json`` -- the gripper bridge on the robot, Python
+* ``src/rg6_control/scripts/rg6_finger_kinematics.json`` -- the gripper bridge on the robot, Python
 * ``contract/robot-contract`` profile, ``gripper.linkage.table`` -- the workstation code, Python
 
-The generator writes the first two.  The third is a HAND copy, exactly like the arm poses were before
-``test_ssot_parity.py`` -- and those had already drifted (``packed[5]`` lost a digit).  A drift here is worse than a
-wrong number: the container mock would then compute a different width from the same command than the real robot, and
-the entire point of the mock is that it does not.
+Two of the three are generated, and since the bridge moved into this package they lie next to the generator that
+writes them; only the profile is a HAND copy, exactly like the arm poses were before ``test_ssot_parity.py`` -- and
+those had already drifted (``packed[5]`` lost a digit).  A drift here is worse than a wrong number: the container
+mock would then compute a different width from the same command than the real robot, and the entire point of the
+mock is that it does not.
 
 Each copy also carries its own interpolation code -- generated C++, ``GripperLinkage`` in ``robot_contract``, and
 ``FingerKinematics`` in the bridge.  Same table, three implementations, and only their agreement makes the table one
@@ -23,6 +24,7 @@ Neither ROS nor a robot is needed; the C++ side is compiled here, and skips with
 from __future__ import annotations
 
 import json
+import pathlib
 import re
 import shutil
 import subprocess
@@ -32,8 +34,11 @@ import yaml
 from table_sources import sibling
 
 PROFILE_RELPATH = "contract/robot-contract/src/robot_contract/profiles/a200_0553.yaml"
-JSON_RELPATH = "robot/husky-custom-setup/scripts/rg6_finger_kinematics.json"
-BRIDGE_RELPATH = "robot/husky-custom-setup/scripts/rg6_grip_bridge.py"
+
+#: The two copies of this repo, addressed locally -- only the profile still lives in a sibling.
+_HERE = pathlib.Path(__file__).resolve().parent.parent
+JSON_PATH = _HERE / "src/rg6_control/scripts/rg6_finger_kinematics.json"
+BRIDGE_PATH = _HERE / "src/rg6_control/scripts/rg6_grip_bridge.py"
 
 #: Angles to compare the three implementations at: both bounds, both sides of every kind of edge, and a spread of
 #: interior points.  Values outside the range are deliberate -- the clamp is behaviour, not an accident.
@@ -50,7 +55,7 @@ def _cpp_table(repo_root):
 
 
 def _json_table():
-    return [[float(q), float(w)] for q, w in json.loads(sibling(JSON_RELPATH).read_text())["table_q_rad_width_m"]]
+    return [[float(q), float(w)] for q, w in json.loads(JSON_PATH.read_text())["table_q_rad_width_m"]]
 
 
 def _profile_table():
@@ -80,7 +85,7 @@ def test_the_declared_joint_limits_match_the_table_ends(repo_root):
     q_min = float(re.search(r"kQMinRad = ([\d.]+)", header).group(1))
     q_max = float(re.search(r"kQMaxRad = ([\d.]+)", header).group(1))
     assert [q_min, q_max] == [table[0][0], table[-1][0]]
-    assert json.loads(sibling(JSON_RELPATH).read_text())["joint_limits_rad"] == [q_min, q_max]
+    assert json.loads(JSON_PATH.read_text())["joint_limits_rad"] == [q_min, q_max]
 
 
 def test_the_width_falls_strictly_over_the_whole_table(repo_root):
@@ -149,7 +154,7 @@ def bridge_kinematics():
     import importlib.util
     import sys
 
-    path = sibling(BRIDGE_RELPATH)
+    path = BRIDGE_PATH
     name = "rg6_grip_bridge_under_test"
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -159,7 +164,7 @@ def bridge_kinematics():
     sys.modules[name] = module
     try:
         spec.loader.exec_module(module)
-        return module.FingerKinematics(str(sibling(JSON_RELPATH)))
+        return module.FingerKinematics(str(JSON_PATH))
     finally:
         sys.modules.pop(name, None)
 

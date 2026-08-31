@@ -8,6 +8,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
 
+## 2026-08-31 (the gripper's driver half comes home)
+
+- **`rg6_grip_bridge.py` and its linkage table moved into `rg6_control`.** The bridge is the DRIVER half of a pair
+  whose MOCK half (`rg6_control_sim`) has been in this package all along: same action under the same name, same
+  `bridge_state` fields character for character, same gear table. That the one lived here and the other in the
+  robot's setup repo was an accident of history -- the C++ driver over tool DO0 was deleted when the RG6 moved onto
+  the OnRobot URCap, and its replacement was written where the systemd unit already stood.
+- **It is not robot-specific.** Everything that names this a200 is a ROS parameter with a default
+  (`endpoint_url`, `manipulators_ns`, `driver_joint`, `force_range_n`, `kinematics_file`); what is left is a
+  generic RG6-over-URCap driver, which is what a gripper package describes.
+- **What did NOT move: the service.** Unit, wrapper and the root-owned copy under `/usr/local/bin` stay in
+  `husky-custom-setup` -- a systemd unit is robot setup. The installer deploys the file out of this workspace, the
+  same way it already deployed `rg6_moveit_patch`.
+- **Two of the three table copies now lie next to their generator.** `derive_finger_kinematics.py` wrote the JSON
+  into a FOREIGN repo by shell redirect until today; `test_linkage_parity.py` reaches across a repo boundary for
+  one file instead of three, and CI clones one sibling instead of two.
+- **The install rule puts the table in `lib/rg6_control`, not under `share/`.** The bridge resolves it with
+  `Path(__file__).with_name()`, so script and table have to stay adjacent in the install space as well -- which is
+  also how the robot's root-owned pair sits under `/usr/local/bin`.
+- **New `tests/test_grip_bridge.py`.** It runs the node's own `--selftest` as a subprocess (a fake URCap: units,
+  float coercion, clamping, timeout, status message, linkage, concurrency), and pins the three properties the
+  layout depends on: the table lies beside the script, the module imports nothing the robot has no packages for,
+  and the names other code reaches for still exist.
+- The generated header was regenerated rather than hand-edited; against `urdf/robot.urdf` the table came out
+  byte-identical, only its comment changed.
+
 ## 2026-08-31 (this package describes a hand, not a robot)
 
 - **The Clearpath extras left for a repo of their own** (`husky-extras`,

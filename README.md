@@ -4,8 +4,8 @@ Robot description, MoveIt glue and container mock for the **OnRobot RG6**
 gripper on a **Universal Robots** arm (CB3) of the Clearpath Husky `a200-0553`.
 
 **This repository does not drive the real gripper.** On the robot the RG6 is
-commanded by **`rg6_grip_bridge`** (onboard, Python, in
-[`husky-custom-setup`](../husky-custom-setup/scripts/rg6_grip_bridge.py)) over
+commanded by **`rg6_grip_bridge`** (onboard, Python,
+`src/rg6_control/scripts/rg6_grip_bridge.py`) over
 **XML-RPC against the OnRobot URCap**. What lives here is everything around
 that: the measured model, the MoveIt wiring, the `joint_states` plumbing, and a
 mock that offers the same surface without hardware.
@@ -63,7 +63,7 @@ a caller never branches on which one it is talking to:
 ### How it works
 
 ```
-                  this repository                    husky-custom-setup / UR
+                          this repository                        UR / OnRobot
   MoveIt, plan_server ──gripper_cmd──▶  rg6_grip_bridge ──XML-RPC──▶ OnRobot URCap ─▶ RG6
                                         rg6/bridge_state  ◀──getters──┘
   RViz / Foxglove     ◀──joint_states── rg6_grip_bridge (5 Hz)
@@ -116,10 +116,12 @@ marked as non-hardware truth through the `source` field in `/twin/result`.
 
 ### Real robot
 
-Nothing in this repository is started for the gripper. `rg6_grip_bridge` runs
-as `clearpath-custom-rg6-grip-bridge`, installed by
-[`husky-custom-setup`](../husky-custom-setup/). Command it through the action
-above.
+The node lives here, the service that starts it does not. `rg6_grip_bridge`
+runs as `clearpath-custom-rg6-grip-bridge` — unit, wrapper and the root-owned
+copy under `/usr/local/bin` come from
+[`husky-custom-setup`](../husky-custom-setup/), which deploys the file out of
+this workspace. Command it through the action above; nothing here is launched
+by hand.
 
 ### joint_states plumbing (`joint_states.launch.py`)
 
@@ -199,7 +201,7 @@ The RG6 linkage is not linear, so the mapping between the driving joint
 `rg6_finger_joint` [rad] and the clear width between the pad faces [m] is a
 **generated table**, not a formula:
 
-* `husky-custom-setup/scripts/rg6_finger_kinematics.json` — joint limits
+* `src/rg6_control/scripts/rg6_finger_kinematics.json` — joint limits
   `0.0 … 1.25478` rad, maximum interpolation error `4.7e-05` m. The width is
   measured between the two `flex_finger` meshes.
 * Regenerate it from the URDF after **every** change to the gripper model:
@@ -271,8 +273,9 @@ uv run pytest sdk/plan-bridge/tests/test_offboard_gripper.py    # needs the cont
 
 ## Related
 
-- [husky-custom-setup](../husky-custom-setup/README.md) — `rg6_grip_bridge`,
-  the node that drives the real gripper
+- [husky-custom-setup](../husky-custom-setup/README.md) — `robot.yaml` (SSOT),
+  and the installer + systemd unit that roll out and start `rg6_grip_bridge`
+  from this workspace
 - [robot-contract](../../contract/robot-contract/README.md) — the profile that
   names the action, the state topic and the gear table
 - [husky-offboard](../../deploy/husky-offboard/README.md) — the container that

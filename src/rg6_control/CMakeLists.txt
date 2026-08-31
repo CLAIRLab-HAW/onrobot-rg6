@@ -55,7 +55,14 @@ install(DIRECTORY launch
 install(TARGETS rg6_control_sim joint_state_aggregator joint_state_relay
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
-install(PROGRAMS scripts/rg6_moveit_patch
+install(PROGRAMS scripts/rg6_moveit_patch scripts/rg6_grip_bridge.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+# The linkage table goes NEXT TO the bridge, not under share/: rg6_grip_bridge resolves it with
+# Path(__file__).with_name(), so the two files have to stay adjacent in the install space as well -- and they do
+# in the root-owned copy the robot's installer places under /usr/local/bin.  The parameter kinematics_file
+# overrides it; the default is what the deployed pair relies on.
+install(FILES scripts/rg6_finger_kinematics.json
   DESTINATION lib/${PROJECT_NAME}
 )
 

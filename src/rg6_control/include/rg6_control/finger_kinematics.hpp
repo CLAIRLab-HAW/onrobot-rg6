@@ -4,9 +4,9 @@
 //
 // Joint angle rg6_finger_joint [rad] -> clear width between the pad faces [m], measured
 // between the two flex_finger meshes.  The same table lies as JSON next to the
-// gripper bridge on the robot
-// (husky-custom-setup/scripts/rg6_finger_kinematics.json) and in the robot
-// profile (robot_contract, gripper.linkage.table).
+// gripper bridge (scripts/rg6_finger_kinematics.json, read by rg6_grip_bridge
+// on the robot) and in the robot profile (robot_contract,
+// gripper.linkage.table).
 //
 // There is no closed formula: the fingers are a four-bar chain.
 //

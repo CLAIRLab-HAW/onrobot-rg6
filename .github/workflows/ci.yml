@@ -1,13 +1,14 @@
-# CI: pytest + ruff (hard errors only).  Two sibling repos are cloned, because the whole point of this suite is that
+# CI: pytest + ruff (hard errors only).  ONE sibling repo is cloned, because the whole point of this suite is that
 # the finger linkage table exists three times over and the copies must agree:
 #
 #   here                     src/rg6_control/include/rg6_control/finger_kinematics.hpp   (generated C++)
-#   husky-custom-setup       scripts/rg6_finger_kinematics.json                          (the bridge on the robot)
+#   here                     src/rg6_control/scripts/rg6_finger_kinematics.json          (the bridge on the robot)
 #   robot-contract           the a200_0553 profile, gripper.linkage.table                (a HAND copy)
 #
-# Without those checkouts the cross-repo comparisons would not merely be weaker -- tests/table_sources.py FAILS
-# rather than skips once a workspace root is found, so a mistyped path here turns the run red instead of reporting
-# green having compared nothing.  That is the failure mode this workflow exists to avoid.
+# Two of the three live here since the bridge moved into rg6_control; only the profile is still a sibling.  Without
+# that checkout the cross-repo comparison would not merely be weaker -- tests/table_sources.py FAILS rather than
+# skips once a workspace root is found, so a mistyped path here turns the run red instead of reporting green having
+# compared nothing.  That is the failure mode this workflow exists to avoid.
 #
 # No docker, no ROS, no robot: the header is compiled with the runner's own g++ into a small probe program and its
 # results are compared against the two Python implementations.  ubuntu-latest ships a compiler, so the
@@ -40,12 +41,6 @@ jobs:
       # so against another PRIVATE repo of the same org the API answers "Not Found" rather than 403 -- it does not
       # confirm the repo exists.  The org secret is the same one robot-contract, perception, plan-bridge,
       # skill-tree, husky-sdk and husky-offboard use for their private siblings.
-      - uses: actions/checkout@v5
-        with:
-          repository: CLAIRLab-HAW/husky-custom-setup
-          path: robot/husky-custom-setup
-          token: ${{ secrets.CLAIRLAB_READ_TOKEN }}
-
       - uses: actions/checkout@v5
         with:
           repository: CLAIRLab-HAW/robot-contract

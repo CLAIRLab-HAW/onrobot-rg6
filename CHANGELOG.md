@@ -8,6 +8,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
 
+## 2026-08-31 (the named posture 'open' is inside the joint it is defined on)
+
+- **`rg6_moveit_patch` wrote a `group_state` the joint cannot reach.** `--angle-open` defaulted to `0.0`, the
+  geometric zero of the four-bar chain, while `rg6_v2.yaml` clamps `limit.lower` to the mechanical open stop at
+  0.038 rad. MoveIt validates a named posture against the joint limits of the model and refuses anything outside
+  them: measured on 2026-08-28 on the a200-0553, every MoveIt Task Constructor grasp died with "Goal state is out
+  of bounds!" after finding 28, 32, 37 and 28 valid IK solutions -- none of them connectable, because the pregrasp
+  they all start from does not exist.
+- **The angle comes out of `rg6_description/config/rg6_v2.yaml` now, not out of a literal.** The SRDF posture and
+  the URDF limit are the same number, so they are read from the same place: `find_model_config` looks along
+  `AMENT_PREFIX_PATH` and then beside the script itself, which covers the checkout as well as colcon's isolated
+  and merged install spaces. AMENT_PREFIX_PATH alone would not do -- the offboard entrypoint sources the rg6
+  overlay in a subshell around the generator run and calls the tool outside it.
+- **One literal is left, and it is pinned.** `OPEN_ANGLE_FALLBACK` carries 0.038 for the case where the config is
+  unreadable or PyYAML is missing; `tests/test_rg6_moveit_patch.py` asserts it against `limit.lower`, so it cannot
+  drift. Falling back to the geometric zero instead would have put the refused posture straight back.
+- **New `tests/test_rg6_moveit_patch.py`**, the first tests this tool has: the default IS the limit, the patched
+  SRDF states a posture INSIDE it, a missing config warns instead of writing zero, and an explicit `--angle-open`
+  still wins.
+- **The workaround in `husky-offboard`'s `entrypoint.sh` can go, and with it R44.** It rewrote
+  `value="0.0"` to the URDF's lower limit with `sed` after every generator run, and said so in its own comment: the
+  value comes out of onrobot-rg6 and belongs fixed there. The pattern it greps for no longer occurs -- both repos
+  are outside this one, so retiring it is their commit.
+- **The help text of `--angle-open` said 153.2 mm.** That is what the chain computes at `q = 0`, an opening the
+  hardware never delivers; at the stop the hand is 151.1 mm wide (measured 2026-08-27 with a caliper, 151.13 mm in
+  the linkage table). The stroke figure in the `disable_collisions` rationale was stale for the same reason.
+
 ## 2026-08-31 (the gripper weighs what the data sheet says)
 
 - **The `inertial:` block of `rg6_v2.yaml` is derived instead of inherited.** Upstream shipped one placeholder for

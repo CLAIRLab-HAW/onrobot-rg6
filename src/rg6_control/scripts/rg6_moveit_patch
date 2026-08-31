@@ -15,7 +15,12 @@ clearpath-custom-setup.py):
          URDF <mimic> (rg6_description) they are derived as mimic_joints_ from
          finger_joint -> a clean preview of opening/closing, without being
          actively planned (the active DOF stays 1).
-       + group_states 'open'/'close'
+       + group_states 'open'/'close'. The angle of 'open' is the driver
+         joint's OWN lower limit, read from rg6_description's
+         config/rg6_v2.yaml: that limit is the mechanical open stop of the
+         hand (0.038 rad = 151.1 mm), not the geometric zero of the four-bar
+         chain, and a named posture outside the limits of the joint it is
+         defined on is refused by MoveIt with "Goal state is out of bounds!".
        + end_effector 'rg6' parent_group arm_0, parent_link arm_0_wrist_3_link
          (the deepest arm_0 member; tool0 is not an arm_0 member, see the
          comment at SRDF_FRAGMENT_TEMPLATE)
@@ -66,6 +71,20 @@ TAG = "rg6_moveit_patch"
 
 MARKER_BEGIN = "<!-- onrobot-rg6:BEGIN (rg6_moveit_patch; do not edit by hand) -->"
 MARKER_END = "<!-- onrobot-rg6:END -->"
+
+# The driver joint's limits are DATA (rg6_description/config/rg6_v2.yaml), and the SRDF posture "open" has to be
+# the same number as the URDF limit it is measured against: MoveIt validates a named group_state against the joint
+# limits of the model and refuses anything outside them with "Goal state is out of bounds!" -- measured 2026-08-28
+# on every MoveIt Task Constructor grasp of the a200-0553 (28, 32, 37 and 28 valid IK solutions, none of them
+# connectable). Hence the config rather than a literal here: two places holding the open stop is one place too
+# many, and the joint limit is the one the planner actually reads.
+MODEL_CONFIG_RELPATH = os.path.join("rg6_description", "config", "rg6_v2.yaml")
+
+# Last resort when the config above is not findable and when PyYAML is missing. It is a second literal, and it is
+# pinned to the first one by tests/test_rg6_moveit_patch.py, so it cannot drift away unnoticed. Falling back to the
+# geometric zero of the chain instead would put back exactly the pose MoveIt refuses -- a fallback that
+# reintroduces the fault is not one.
+OPEN_ANGLE_FALLBACK = "0.038"
 
 # Second marker block: disables all intra-gripper self-collision pairs so that
 # MoveIt can plan with articulated finger collision geometries. Without this
@@ -125,7 +144,8 @@ MARKER_END = "<!-- onrobot-rg6:END -->"
 #   first colliding           1,238486 rad
 #   contact band              0,016294 rad  =  1,3 % of the stroke
 #
-# The stroke goes from 153,17 mm (open) to 0,40 mm (closed). So as long as the
+# The stroke goes from 151,13 mm at the open stop (q = 0,038) to 0,40 mm
+# (closed). So as long as the
 # pair was active, move_group refused EVERY pose narrower than 3 mm -- while
 # the same SRDF offered a group_state "close" at 1,25478 rad. The model
 # forbade its own named state, and nothing thinner than 3 mm was graspable.
@@ -176,6 +196,68 @@ SRDF_FRAGMENT_TEMPLATE = """\
 # gripper -> both go away, and arm_0.attachEndEffector('rg6') is called.
 # wrist_3_link vs tool0 differ only by the fixed flange transform; gripper poses
 # and IK run over the full kinematic tree resp. the gripper TCP -> no effect.
+
+
+def find_model_config(explicit=None):
+    """Path of rg6_description's config/rg6_v2.yaml, or None when it is nowhere to be found.
+
+    AMENT_PREFIX_PATH is asked first but only asked: the offboard entrypoint sources the rg6 overlay in a SUBSHELL
+    around the generator run and calls this tool outside it, so the variable does not necessarily carry the
+    package at the moment this runs. The three guesses after it cover the layouts this file itself lies in -- the
+    checkout, colcon's isolated install space (which /opt/onrobot-rg6 is) and a merged one.
+    """
+    if explicit:
+        return explicit if os.path.isfile(explicit) else None
+
+    here = os.path.dirname(os.path.realpath(__file__))
+    candidates = [
+        os.path.join(prefix, "share", MODEL_CONFIG_RELPATH)
+        for prefix in (os.environ.get("AMENT_PREFIX_PATH") or "").split(os.pathsep)
+        if prefix
+    ]
+    candidates += [
+        # checkout:         src/rg6_control/scripts/rg6_moveit_patch
+        os.path.join(here, "..", "..", MODEL_CONFIG_RELPATH),
+        # merged install:   <install>/lib/rg6_control/rg6_moveit_patch
+        os.path.join(here, "..", "..", "share", MODEL_CONFIG_RELPATH),
+        # isolated install: <install>/rg6_control/lib/rg6_control/rg6_moveit_patch
+        os.path.join(here, "..", "..", "..", "rg6_description", "share", MODEL_CONFIG_RELPATH),
+    ]
+    for candidate in candidates:
+        path = os.path.normpath(candidate)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def resolve_open_angle(explicit_config=None):
+    """The angle for the group_state "open": limit.lower of the driver joint, as a string for the SRDF.
+
+    :param explicit_config: path given on the command line; the search of ``find_model_config`` when None.
+    :returns: the value as it goes into the SRDF -- ``OPEN_ANGLE_FALLBACK`` with a warning when the config
+        cannot be read, never the geometric zero.
+    """
+    path = find_model_config(explicit_config)
+    if path is None:
+        log(f"WARN: {explicit_config or MODEL_CONFIG_RELPATH} not found (rg6_description not installed, "
+            f"AMENT_PREFIX_PATH empty?) - group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        return OPEN_ANGLE_FALLBACK
+    try:
+        import yaml
+
+        with open(path) as f:
+            limit = (yaml.safe_load(f) or {}).get("limit") or {}
+        lower = float(limit["lower"])
+    except ImportError:
+        log(f"WARN: PyYAML is missing (apt: python3-yaml) - {path} not read, "
+            f"group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        return OPEN_ANGLE_FALLBACK
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        log(f"WARN: no usable limit.lower in {path} ({e}) - "
+            f"group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        return OPEN_ANGLE_FALLBACK
+    log(f"group_state 'open' = {lower!r} rad, the joint's lower limit from {path}.")
+    return repr(lower)
 
 
 def log(msg, err=False):
@@ -334,7 +416,8 @@ def verify_moveit_yaml(path, args):
     return True
 
 
-def main():
+def build_parser():
+    """The command line, on its own so that the tests can ask for the same defaults the call sites get."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--setup-path", default="/etc/clearpath",
@@ -350,13 +433,17 @@ def main():
                         help="parent link of the EE - MUST be a member of parent_group "
                              "(default: arm_0_wrist_3_link; NOT arm_0_tool0, because "
                              "tool0 is no member of the joint-based arm_0 group)")
-    # From the linkage kinematics of the rg6_v2 (finger_kinematics.hpp,
-    # produced by tools/derive_finger_kinematics.py), not estimated.  Estimated
-    # end values bake a half-open and a not-quite-closed hand into the SRDF
-    # group states "open"/"close".
-    parser.add_argument("--angle-open", default="0.0",
-                        help="rg6_finger_joint angle 'open' -- the widest "
-                             "representable width, 153.2 mm (default: 0.0)")
+    # Neither end value is estimated: 'close' comes from the linkage kinematics of the rg6_v2
+    # (finger_kinematics.hpp, produced by tools/derive_finger_kinematics.py), 'open' out of the joint limit in
+    # rg6_v2.yaml.  Estimated end values bake a half-open and a not-quite-closed hand into the SRDF group states
+    # "open"/"close" -- and an 'open' below the limit bakes in a posture MoveIt refuses outright.
+    parser.add_argument("--model-config", default=None,
+                        help="rg6_description's config/rg6_v2.yaml, the source of the 'open' angle "
+                             "(default: found next to this script or on AMENT_PREFIX_PATH)")
+    parser.add_argument("--angle-open", default=None,
+                        help="rg6_finger_joint angle 'open' -- the mechanical open stop of the hand, 151.1 mm "
+                             "wide (default: limit.lower from rg6_v2.yaml, 0.038; NOT the geometric zero of the "
+                             "four-bar chain, which lies outside the joint limit and is refused by MoveIt)")
     parser.add_argument("--angle-closed", default="1.25478",
                         help="rg6_finger_joint angle 'close' -- the narrowest "
                              "pose, 0.4 mm.  NOT the 1.3 of upstream: "
@@ -366,10 +453,16 @@ def main():
                         default="manipulators/rg6_gripper_controller",
                         help="MoveIt controller name moveit.yaml is checked against "
                              "(it is set in robot.yaml, not here)")
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
 
     setup = args.setup_path.rstrip("/")
     log(f"start (setup: {setup}).")
+    if args.angle_open is None:
+        args.angle_open = resolve_open_angle(args.model_config)
     patch_srdf(os.path.join(setup, "robot.srdf"), args)
     # Only a check now: moveit.yaml is filled by the Clearpath generator from
     # robot.yaml (see the module docstring). Exit code 1 instead of silently

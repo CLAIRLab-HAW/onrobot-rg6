@@ -45,8 +45,13 @@
       <origin xyz="${origin[id]['x']} ${origin[id]['y']} ${origin[id]['z']}" rpy="${rpy}"/>
     </xacro:macro>
 
+    <!-- The <origin> is what makes the tensor mean anything: it is taken about the part's own centre of mass, and
+         without the offset URDF reads it as being about the LINK frame instead.  For the body that is 52 mm out,
+         and the error goes into the model as a mass that hangs in the wrong place rather than as a parse failure.
+         rpy stays zero, because the tensor is written in the link's axes and not in its principal ones. -->
     <xacro:macro name="_inertial" params="id">
       <inertial>
+        <origin xyz="${inertial[id]['cx']} ${inertial[id]['cy']} ${inertial[id]['cz']}" rpy="0 0 0"/>
         <mass value="${inertial[id]['mass']}"/>
         <inertia ixx="${inertial[id]['ixx']}" iyy="${inertial[id]['iyy']}" izz="${inertial[id]['izz']}"
                  ixy="${inertial[id]['ixy']}" ixz="${inertial[id]['ixz']}" iyz="${inertial[id]['iyz']}"/>

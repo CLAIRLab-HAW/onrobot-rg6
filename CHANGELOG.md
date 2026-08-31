@@ -7,6 +7,31 @@ how it embeds into the onboard stack in
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
+
+## 2026-08-31 (the gripper weighs what the data sheet says)
+
+- **The `inertial:` block of `rg6_v2.yaml` is derived instead of inherited.** Upstream shipped one placeholder for
+  every part -- `mass: 0.001` with `ixx = iyy = izz = 0.001` -- wrong in both directions at once: three orders too
+  light for a hand the data sheet puts at 1.25 kg, about four orders too stiff for a part that fits in 3 cm. The
+  whole model weighed 0.789 kg, so 0.461 kg were missing from the wrist of the UR5.
+- **New `tools/derive_link_inertia.py`.** Integrates each collision mesh exactly (Eberly, polyhedral mass
+  properties), gives the parts one homogeneous density and fixes it so the sum over all instances is the data
+  sheet's 1.25 kg. Density comes out at 1343.1 kg/m^3.
+- **The result is cross-checked against the second data sheet figure, and lands.** Nothing in the derivation aims
+  at the centre of gravity -- the distribution is fixed by volume alone -- so it is a free result: 90.58 mm above
+  the tool base point against the published 90.0 mm, 0.58 mm out. That also settles a reading the mass alone
+  leaves open: the 1.25 kg includes the mounting bracket.
+- **The `_inertial` macro now writes an `<origin>`.** Without it URDF reads a tensor taken about the part's centre
+  of mass as being about the link frame; for the body that is 52 mm out, and it parses either way.
+- **`husky_top_assembly` has an `<inertial>`.** It carried six collision boxes and no mass, so
+  `twinlink.urdf_mujoco._ensure_inertial` was substituting 0.1 kg for a half-metre portal frame -- a factor of 62.
+  2.3 L of measured structure volume at the assumed density of 6xxx aluminium gives 6.21 kg, distributed over the
+  six boxes by volume. The density is an assumption, not a measurement; R47 carries the scale.
+- **The patcher for those apt-side gaps lives in `husky-custom-setup`, not here.** `urdf_physics_patch` edits the
+  UR joints, the wheel joints and the a200 top plate -- an arm and a platform concern, with not one gripper part
+  among its targets -- so it sits next to `clearpath_custom_setup.py`, whose package edits it is the third of.
+  `rg6_moveit_patch` stays: it writes a foreign file about this repo's own subject.
+
 ## 2026-08-30 (ruff resolves the same settings from anywhere)
 
 - **CI pins `ruff>=0.16.5,<0.17`** -- the minor the lint scope was measured against, the same bound the

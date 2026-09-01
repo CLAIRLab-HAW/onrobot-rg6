@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
 
+## 2026-09-02 (one shape for the `__main__` block)
+
+- **`if __name__ == "__main__":` now ends in `raise SystemExit(main())`** -- the single form the workspace
+  settled on across its 97 entry points (rule and reasoning in `.claude/rules/code-style.md`). It needs no
+  `import sys`, carries a `main` returning `int` and one returning `None` alike (`SystemExit(None)` is exit
+  code 0), and matches the wrapper setuptools generates for `[project.scripts]`, so running the file, running
+  `python -m`, and the installed console command now agree on the exit code.
+- `tools/derive_link_inertia.py` only; was `sys.exit(main())`.
+
 ## 2026-09-01 (the finger joint stops dropping out)
 
 - **`rg6_grip_bridge` publishes `rg6_finger_joint` in every pass, measurement or not.** New

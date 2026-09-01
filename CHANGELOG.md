@@ -8,6 +8,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 the versioning [Semantic Versioning](https://semver.org/).
 
 
+## 2026-09-01 (the finger joint stops dropping out)
+
+- **`rg6_grip_bridge` publishes `rg6_finger_joint` in every pass, measurement or not.** New
+  `finger_angle_to_publish` decides the angle: the measured one while the gripper measures, the last measured one
+  while it does not, the open stop of the linkage table until there has been a first measurement. Until today the
+  topic went silent whenever `state.readable` was false -- and the silence reached much further than it looked.
+- **What the silence cost, measured at the robot on 2026-09-01 with the arm unpowered:** without the joint,
+  `robot_state_publisher` places none of the eight movable RG6 links, so they have no TF, so `move_group`'s
+  `shape_mask` cannot mask them out of the depth cloud. Ten `Missing transform for shape mesh` lines per cloud
+  (handles 14...23 -- the ten collision meshes on those eight links; both `finger_tip` links carry two), the whole
+  hand out of the octomap self filter with the camera sitting on the gripper, and an occupancy update every 2.44 s
+  instead of 5 Hz, because the updater waits `shape_transform_cache_lookup_wait_time` = 0.3 s **per** missing link.
+  Context and the earlier measurement: R43 in the workspace's ROBOTER-TODO.
+- **A held value is not a claimed measurement.** `status_payload` is untouched, so the manipulator diagnostics still
+  reads `status: -1`/`safety_failed: true`; an endpoint that does not answer at all still leaves `bridge_state`
+  silent, which is that path's own signal. On top of that the substitution is edge-triggered in the log -- one line
+  when it starts, one when the measurement returns, with the duration.
+- **Why the last measured value before the open stop:** the state this guards against is an unpowered tool
+  connector, and an unpowered gripper does not move, so the last measurement is the physically correct angle rather
+  than a guess. The open stop is only the fallback for "there has not been one yet", and it is read off the table
+  (`q_min`) instead of written as a literal -- it is 0.038 rad (151.1 mm), the widest the DEVICE reaches, and not
+  the 0.0 the SRDF's `open` group state carries. That difference is the known
+  `Deviation in joint rg6_finger_joint: [0] != [0.038]`.
+- **The self-test grew a section** (measured angle, held value, open stop, and the unreachable endpoint), so
+  `tests/test_grip_bridge.py` covers the new path through the same subprocess invocation the installer runs.
+- `rg6_control_sim` needed no change: it publishes the driver joint unconditionally at 50 Hz.
+
 ## 2026-08-31 (the gripper's driver half comes home)
 
 - **`rg6_grip_bridge.py` and its linkage table moved into `rg6_control`.** The bridge is the DRIVER half of a pair

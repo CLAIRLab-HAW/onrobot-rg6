@@ -295,6 +295,42 @@ def status_payload(state, last_command: str = COMMAND_NONE) -> dict:
     }
 
 
+def finger_angle_to_publish(
+    state: Rg6State | None, linkage: FingerKinematics, last_measured_rad: float | None
+) -> tuple[float, bool]:
+    """The angle for ``rg6_finger_joint`` -- also when the gripper measures nothing (R43).
+
+    Returns ``(angle_rad, measured)``.  ``measured`` is false for every substituted value; the caller keeps it out of
+    its history and the health signal stays where it belongs, on ``<ns>/rg6/bridge_state`` (``status: -1``) and in the
+    edge-triggered log line.
+
+    WHY THIS EXISTS AT ALL -- the topic used to stay silent whenever the gripper did not measure, and that silence
+    reaches much further than it looks.  Eight of the ten RG6 links with collision geometry are placed by
+    ``robot_state_publisher`` out of ``rg6_finger_joint`` (directly and through the five ``<mimic>`` joints).  Without
+    the joint they have NO TF, and ``move_group``'s ``shape_mask`` then cannot mask them out of the depth cloud: the
+    whole hand falls out of the octomap self filter and its own fingers become obstacle voxels in front of a camera
+    that sits on the gripper.  Measured on the a200-0553 on 2026-09-01 with the arm unpowered: ten ``Missing transform
+    for shape mesh`` lines per cloud (handles 14...23, the ten collision meshes of the eight links) and, because the
+    updater waits ``shape_transform_cache_lookup_wait_time`` = 0.3 s PER link, an occupancy update every 2.44 s instead
+    of the 5 Hz the feed delivers.
+
+    WHY THE LAST MEASURED VALUE FIRST:  the state this guards against is an unpowered tool connector, and an unpowered
+    gripper does not move.  The last measurement is therefore the physically correct angle, not a guess -- unlike the
+    open stop, which merely is the pose with the largest envelope and thus the conservative one for a clearance check.
+
+    WHY THE OPEN STOP AS THE FALLBACK, and why it is not written as a literal:  ``q_min`` is where the linkage table
+    starts, and the table is generated from the URDF (R19).  A hard 0.0 here would be a second place that has to be
+    right about the same geometry -- the exact construction model and driver already drifted apart on once.
+
+    What this does NOT do is claim a measurement.  ``status_payload`` is untouched, so the manipulator diagnostics
+    still reads ``status: -1``/``safety_failed: true`` and reports the outage; ``state=None`` (the endpoint did not
+    answer at all) additionally leaves ``bridge_state`` silent, which is that path's own signal.
+    """
+    if state is not None and state.readable:
+        return float(linkage.angle_from_width(state.width_m)), True
+    return (linkage.q_min if last_measured_rad is None else float(last_measured_rad)), False
+
+
 # ---------------------------------------------------------------------------
 # Selftest -- without ROS, so that it runs on the workstation too.
 # ---------------------------------------------------------------------------
@@ -481,12 +517,38 @@ def selftest() -> int:
         for t in threads:
             t.join()
         assert not errors, errors
+
+        # 8. The finger angle that goes onto joint_states -- INCLUDING the case where nothing measures (R43).  A
+        #    missing rg6_finger_joint costs the eight movable RG6 links their TF, and move_group then drops the whole
+        #    hand out of the octomap self filter; measured at the robot on 2026-09-01 as ten shape_mask lines per
+        #    cloud (handles 14...23) and an occupancy update rate of 0.4 Hz instead of 5.
+        measured = Rg6State(width_m=0.100, busy=False, grip_detected=False, status=0, safety_failed=False)
+        q, is_measured = finger_angle_to_publish(measured, kin, None)
+        assert is_measured and abs(q - kin.angle_from_width(0.100)) < 1e-12, q
+
+        # The sentinel of an unpowered tool connector: with a measurement behind it, that one is held -- the gripper
+        # cannot move without power, so the last measured value is the physically correct one.
+        sentinel = Rg6State(width_m=-0.999, busy=True, grip_detected=True, status=-1, safety_failed=True)
+        q, is_measured = finger_angle_to_publish(sentinel, kin, 0.7)
+        assert not is_measured and q == 0.7, q
+
+        # Without one -- the bridge came up before the arm -- the OPEN stop applies, and it comes from the table
+        # rather than from a literal: q_min is where the table starts, and that is the widest the DEVICE reaches
+        # (0.038 rad at 151.1 mm), not the 0.0 the SRDF's group_state 'open' carries -- the model opens wider than
+        # the hardware does.  That difference is the known 'Deviation in joint rg6_finger_joint: [0] != [0.038]'.
+        q, is_measured = finger_angle_to_publish(sentinel, kin, None)
+        assert not is_measured and q == kin.q_min, q
+        assert abs(kin.width_from_angle(kin.q_min) - kin.max_width_m) < 1e-12, kin.q_min
+
+        # An unreachable endpoint (Rg6Error -> no state at all) breaks the TF the same way, so it takes the same path.
+        q, is_measured = finger_angle_to_publish(None, kin, None)
+        assert not is_measured and q == kin.q_min, q
     finally:
         srv.shutdown()
 
     print(
         "rg6_grip_bridge selftest: OK (units, float coercion, clamping, "
-        "timeout, status message, linkage table, concurrency)"
+        "timeout, status message, linkage table, concurrency, finger angle fallback)"
     )
     return 0
 
@@ -537,6 +599,11 @@ def run(argv) -> int:
     # pose, and every clearance check around the hand computes against a pose
     # it does not have -- the same class as R15, only movable.  This node has
     # the measured width anyway.
+    #
+    # And it publishes in EVERY pass, measurement or not: a joint that drops
+    # out is worse than the default pose, because then robot_state_publisher
+    # emits no TF at all for the eight movable links and move_group's shape
+    # mask stops masking the hand out of the depth cloud (R43).
     from sensor_msgs.msg import JointState
 
     node.declare_parameter("joint_state_rate_hz", 5.0)
@@ -549,7 +616,11 @@ def run(argv) -> int:
     last_command = [COMMAND_NONE]
 
     def _poll_joint() -> None:
-        """The finger value from the MEASURED width, not from the command.
+        """The finger value from the MEASURED width, not from the command -- and never nothing at all.
+
+        The angle itself comes from ``finger_angle_to_publish``:  measured while the gripper measures, the last
+        measured value while it does not, the open stop of the table until there has been a first measurement.  The
+        topic must not fall silent, see there (R43).
 
         An own thread and NO ROS timer:  ``client.state()`` is a blocking XML-RPC call.  In a timer callback it would
         hang on the executor -- 3 s every 200 ms with a dead endpoint, and the grip command would not get through in
@@ -562,39 +633,51 @@ def run(argv) -> int:
         # pass would bury the moment it began under thousands of identical lines.  One line when it starts, one
         # when it comes back -- and the duration on the second, which is the number an operator actually wants.
         outage_since: float | None = None
+        # The same edge trigger for the SUBSTITUTED joint value (R43).  It is a different event from the outage above
+        # -- an answering endpoint with an unpowered tool connector raises nothing -- and it is the one an operator
+        # needs when TF shows a hand that nobody is measuring.
+        substitute_since: float | None = None
+        last_measured_rad: float | None = None
         while rclpy.ok():
+            state = None
             try:
                 state = client.state()
             except Rg6Error as exc:
-                # The TOPIC stays silent, deliberately: the silence is itself the signal, and the diagnostics
+                # The STATUS TOPIC stays silent, deliberately: the silence is itself the signal, and the diagnostics
                 # judges the age of the last status and reports the outage from it.  The LOG is a different
                 # channel and lies to nobody -- without it the moment an outage began is unrecoverable.
                 if outage_since is None:
                     outage_since = time.monotonic()
                     log.warning(f"gripper status unavailable: {exc}")
-                time.sleep(period)
-                continue
-            if outage_since is not None:
-                log.info(f"gripper status back after {time.monotonic() - outage_since:.1f} s")
-                outage_since = None
-            # The same rule, only for the case where the endpoint ANSWERS
-            # without having measured (state.readable, see there).  Otherwise
-            # -999 mm runs through the clamp and becomes a closed gripper -- a
-            # number move_group takes at face value.
-            #
-            # The status message still goes out, the joint does not: the raw
-            # answer (status -1, safety_failed) is exactly what the manipulator
-            # diagnostics needs to report the outage.  Were it silent too, the
-            # diagnostics would only see ageing and could not tell "bridge
-            # dead" from "gripper unpowered".
-            states.publish(String(data=json.dumps(status_payload(state, last_command[0]))))
-            if not state.readable:
-                time.sleep(period)
-                continue
+            else:
+                if outage_since is not None:
+                    log.info(f"gripper status back after {time.monotonic() - outage_since:.1f} s")
+                    outage_since = None
+                # The status message goes out even when the endpoint ANSWERS without having measured
+                # (state.readable, see there): the raw answer (status -1, safety_failed) is exactly what the
+                # manipulator diagnostics needs to report the outage.  Were it silent too, the diagnostics would
+                # only see ageing and could not tell "bridge dead" from "gripper unpowered".
+                states.publish(String(data=json.dumps(status_payload(state, last_command[0]))))
+
+            # The JOINT, unlike the status, goes out in every pass -- with the measured angle where there is one and
+            # otherwise with the held value or the open stop.  What must never happen is what -999 mm did before the
+            # readable check existed: run through the clamp and arrive as a fully closed gripper, a number move_group
+            # takes at face value (R19).  What must equally not happen is the joint DROPPING OUT, which costs the
+            # eight movable RG6 links their TF and the whole hand its place in the octomap self filter (R43).
+            q_rad, measured = finger_angle_to_publish(state, linkage, last_measured_rad)
+            if measured:
+                last_measured_rad = q_rad
+                if substitute_since is not None:
+                    log.info(f"rg6_finger_joint measured again after {time.monotonic() - substitute_since:.1f} s")
+                    substitute_since = None
+            elif substitute_since is None:
+                substitute_since = time.monotonic()
+                held = "no measurement yet, open stop" if last_measured_rad is None else "last measured value held"
+                log.warning(f"rg6_finger_joint substituted ({held}): {q_rad:.5f} rad")
             msg = JointState()
             msg.header.stamp = node.get_clock().now().to_msg()
             msg.name = [finger_joint]
-            msg.position = [float(linkage.angle_from_width(state.width_m))]
+            msg.position = [q_rad]
             joints.publish(msg)
             time.sleep(period)
 

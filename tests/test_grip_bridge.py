@@ -54,7 +54,10 @@ def test_the_bridge_imports_nothing_the_robot_does_not_have():
     assert not forbidden.intersection(imports), f"module-level imports the robot has no packages for: {imports}"
 
 
-@pytest.mark.parametrize("name", ["Rg6Client", "Rg6Error", "await_settled", "FingerKinematics", "status_payload"])
+@pytest.mark.parametrize(
+    "name",
+    ["Rg6Client", "Rg6Error", "await_settled", "FingerKinematics", "status_payload", "finger_angle_to_publish"],
+)
 def test_the_names_other_code_reaches_for_are_there(name: str):
     """``tools/rg6_stroke_survey.py`` in husky-custom-setup imports three of these by name, and the container mock
     reproduces ``status_payload``'s fields character for character (``rg6_control_sim.cpp``)."""

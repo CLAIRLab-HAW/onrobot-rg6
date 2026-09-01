@@ -72,6 +72,26 @@ a caller never branches on which one it is talking to:
   MoveIt, plan_server ──gripper_cmd──▶  rg6_control_sim  ──▶ same two topics
 ```
 
+**`joint_states` never falls silent.** The bridge publishes `rg6_finger_joint`
+in every pass of its 5 Hz poll, whether the gripper measures or not: the
+measured angle while it does, the last measured one while it does not, and the
+open stop of the linkage table (`q_min` = 0.038 rad at 151.1 mm — the widest the
+*device* reaches, not the 0.0 the SRDF's `open` state carries) until there has
+been a first measurement. A held value is honest because an unpowered gripper
+does not move; that it is held is visible as a `status: -1` on `bridge_state`
+and as one log line when the substitution begins and one when it ends.
+
+The reason is not cosmetic. Eight of the ten RG6 links with collision geometry
+are placed by `robot_state_publisher` out of `rg6_finger_joint` (directly and
+through the five `<mimic>` joints). Without the joint they have no TF at all,
+and `move_group`'s `shape_mask` then cannot mask them out of the depth cloud —
+the whole hand drops out of the octomap self filter and its own fingers become
+obstacle voxels in front of a camera that sits on the gripper. Measured on the
+a200-0553 on 2026-09-01 with the arm unpowered: ten `Missing transform for
+shape mesh` lines per cloud (handles 14…23) and an occupancy update every
+2.44 s instead of the 5 Hz the feed delivers, because the updater waits
+`shape_transform_cache_lookup_wait_time` = 0.3 s **per** missing link.
+
 The URCap is an RTDE client itself and occupies `tool_digital_output_mask`, so
 `ur_robot_driver` runs on an **input recipe without the
 `tool_digital_output*` lines**. ROS therefore cannot set a tool DO at all —
